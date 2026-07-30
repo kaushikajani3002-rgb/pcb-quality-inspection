@@ -1,135 +1,178 @@
-# AI-Based Automated Optical Inspection (AOI) System for PCB Assembly Verification
+# Automated Optical Inspection (AOI) System for PCB Assembly Verification
 
-A production-grade, modular software engineering infrastructure designed to wrap PCB assembly validation models. This system features template matching, error validation pipelines, structured logging, a polymorphic report exporter (PDF, CSV, JSON), and an industrial Streamlit operator dashboard.
+[![Python Version](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
+[![YOLOv11](https://img.shields.io/badge/YOLO-v11m-orange.svg)](https://github.com/ultralytics/ultralytics)
+[![Streamlit](https://img.shields.io/badge/UI-Streamlit-red.svg)](https://streamlit.io/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Project Overview
-In electronics manufacturing, Automated Optical Inspection (AOI) is crucial for identifying assembly errors (missing ICs, misaligned resistors, extra solder bridges, and solder joint cracks). While the AI models (YOLO11m, YOLO11m-Seg) handle visual predictions, this repository provides the high-performance application infrastructure, state machine, logging, configuration, and verification logic necessary for deployment.
-
----
-
-## Software Architecture
-The application is structured following the **Clean Architecture** paradigm:
-1. **Core Domain (Inspection Engine)**: Located in `inspection/`. Contains pure checker algorithms (counting, missing items, misalignment calculations, cracks) with zero external dashboard dependencies.
-2. **Utilities**: Located in `utils/`. Reusable, single-responsibility wrappers for configurations, templated JSON, structured logging, input validations, and ReportLab PDF document layout flowables.
-3. **Data Mocking Layer**: Located in `mock/`. Simulates realistic YOLO bounding box coordinates, segmentation masks, and pixel arrays for PASS/FAIL scenarios, rendering the application immediately testable.
-4. **Presentation (Dashboard UI)**: Located in `app/main.py`. A Streamlit-based web interface operating as a state machine.
+A production-grade software infrastructure and operator console for **Automated Optical Inspection (AOI)** of populated Printed Circuit Board (PCB) assemblies. This application wraps deep learning (YOLO11m component detection) and custom verification checkers to validate physical alignment offsets (in millimeters), quantities, missing components, and solder joint cracks against reference layouts.
 
 ---
 
-## Folder Structure
-```
+## 🚀 Key Features
+
+- **Industrial Operator UI**: Modern, dark-themed Streamlit control console designed for assembly line operators.
+- **YOLO11m Component Detection**: Real-time component bounding box inference and quantity census.
+- **Physical Millimeter Verification**: Euclidean distance position checkers calculating component displacements in physical millimeters ($\text{mm}$) using normalized percentages relative to template boundary dimensions.
+- **Solder Joint Inspection**: Segmentation overlays representing solder joint statuses and highlighting joint crack fractures.
+- **Polymorphic Exporters**: Factory Pattern report generator creating certified quality outputs in **PDF** (rendered tables and styling), **CSV** (ledger reports), and **JSON** (database synchronization logs).
+- **Graceful Hardware Fallback**: Safe loading blocks verifying file integrity, size boundaries, magic-byte header signatures, and weights configurations.
+
+---
+
+## 🛠️ Technology Stack & Requirements
+
+- **Python Version**: `3.12` or higher
+- **Core Packages**:
+  - `ultralytics` (YOLOv11 Deep Learning Models)
+  - `streamlit` (Operator Dashboard)
+  - `opencv-python` (Perspective warping and alignment)
+  - `pillow` (Overlay drawing and image rendering)
+  - `reportlab` (PDF generation factory)
+  - `pandas` & `numpy` (Inventory statistics and matrix math)
+  - `pyyaml` (System configuration loaders)
+
+---
+
+## 📂 Repository Directory Layout
+
+```text
 PCB_AOI/
 ├── app/
 │   ├── __init__.py
-│   └── main.py                   # Streamlit Entry point & State Machine
+│   └── main.py                     # Streamlit Operator UI & State Machine
 ├── config/
-│   └── config.yaml               # Inspection thresholds, tolerances, & path definitions
-├── templates/
-│   ├── arduino_uno.json          # Expected component layout template for Arduino Uno
-│   └── esp32.json                # Expected component layout template for ESP32
-├── mock/
-│   ├── __init__.py
-│   └── mock_results.py           # Simulated model predictions & Pillow image renders
-├── utils/
-│   ├── __init__.py
-│   ├── config_loader.py          # ConfigLoader class (dot notation retrieval)
-│   ├── json_loader.py            # Exception-safe JSON loader/writer
-│   ├── logger.py                 # File-based logging to logs/inspection.log
-│   ├── report_exporter.py        # Abstract Base Exporter & Factory for JSON/CSV/PDF
-│   ├── file_manager.py           # Pre-run path creator
-│   ├── validators.py             # Magic-number byte headers & configuration boundaries
-│   ├── constants.py              # Operational statuses, industrial HEX color codes
-│   └── helper.py                 # Time, date, and byte converters
+│   └── config.yaml                 # Inspection tolerances, paths, & default configurations
+├── docs/
+│   └── architecture.md             # In-depth architectural designs
 ├── inspection/
 │   ├── __init__.py
-│   ├── inspection_engine.py      # Aggregates individual verification checkers
-│   ├── component_counter.py      # Quantity variance calculator
-│   ├── missing_checker.py        # Spatial-to-template coordinate comparison
-│   ├── extra_checker.py          # Unexpected component locator
-│   ├── position_checker.py       # Euclidean distance misalignment validator
-│   └── crack_checker.py          # Joint fracture boundary detector
-├── reports/                      # Exporter target output directory (.pdf, .csv, .json)
-├── outputs/                      # Camera and analysis annotation image outputs
-├── logs/                         # File logs target directory (inspection.log)
-├── assets/                       # Image assets and logo placeholders
-├── docs/
-│   └── architecture.md           # System architecture & future integration instructions
-├── requirements.txt              # Standard library extensions
-└── README.md                     # This document
+│   ├── inspection_engine.py        # Master checker orchestrator
+│   ├── component_counter.py        # Counts detections against expected totals
+│   ├── missing_checker.py          # Finds absent expected components
+│   ├── extra_checker.py            # Highlights unregistered objects
+│   ├── position_checker.py         # Performs millimeter-based displacement calculations
+│   └── crack_checker.py            # Detects solder joint fractures
+├── mock/
+│   ├── __init__.py
+│   └── mock_results.py             # Generates mock inspection data
+├── templates/
+│   ├── arduino_uno.json            # Layout dimensions/coordinates: Arduino Uno
+│   ├── esp32_devkit.json           # Layout dimensions/coordinates: ESP32 DevKit
+│   └── stm32_blue_pill.json        # Layout dimensions/coordinates: STM32 Blue Pill
+├── utils/
+│   ├── __init__.py
+│   ├── config_loader.py            # Loads configuration options
+│   ├── constants.py                # Status and styling hex colors
+│   ├── file_manager.py             # Directory builder
+│   ├── helper.py                   # Formatters and converters
+│   ├── json_loader.py              # Safe JSON template reader/writer
+│   ├── logger.py                   # File logger configuration
+│   ├── report_exporter.py          # Abstract report exporter classes (Factory Pattern)
+│   ├── template_manager.py         # Manages template updates and checks
+│   └── validators.py               # Size & magic-byte header validators
+├── DATASET.md                      # Instructions on dataset structures & custom data
+├── PROJECT_INFO.md                 # Detailed onboarding & project walkthrough
+├── detection_engine.py             # YOLO Inference wrapper & coordination module
+├── train_component_yolo.py         # YOLO11m component detection training script
+├── finetune_defect_yolo.py         # YOLO11m trace defect fine-tuning script
+├── inference_defect_yolo.py        # Batch inference defect analyzer
+└── requirements.txt                # Project dependencies
 ```
 
 ---
 
-## Installation & Setup
+## 💻 Installation & Setup
 
-### Prerequisites
-- Python 3.12+
-- `pip` (Python package manager)
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/kaushikajani3002-rgb/pcb-defect-detection-yolo.git
+   cd pcb-defect-detection-yolo
+   ```
 
-### Step 1: Clone and Navigate
-```bash
-cd d:/PCB/PCB_AOI
-```
+2. **Set up Virtual Environment**:
+   ```bash
+   python -m venv venv
+   # On Windows
+   .\venv\Scripts\activate
+   # On macOS/Linux
+   source venv/bin/activate
+   ```
 
-### Step 2: Set up Virtual Environment (Recommended)
-```bash
-python -m venv venv
-# On Windows PowerShell
-.\venv\Scripts\Activate.ps1
-# On Linux / macOS
-source venv/bin/activate
-```
+3. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### Step 3: Install Dependencies
-```bash
-pip install -r requirements.txt
-```
+4. **Add Trained Weights**:
+   Place your trained model weights inside the `models/` directory (create this directory if it doesn't exist):
+   - Component Detection: `models/component_yolo11m.pt`
+   - Defect Detection: `models/dspcbsd.pt`, `models/deeppcb.pt`, etc.
+   
+   Configure the paths inside the `MODEL_PATHS` dictionary in `detection_engine.py`.
 
 ---
 
-## Running the Application
+## ⚡ Running the Dashboard Console
+
 Launch the Streamlit operator dashboard locally:
 ```bash
 streamlit run app/main.py
 ```
-Open the browser at: `http://localhost:8501`
+Open your browser at: **`http://localhost:8501`**
 
 ---
 
-## Dashboard Features & Interface Guide
-1. **Logo & Terminal Panel**: Identifies active operator ID and system timestamp.
-2. **Template Selection**: Dynamically scans the `templates/` directory for profiles (`Arduino Uno Rev3` / `ESP32 DevKitC`).
-3. **Parameter Sliders**: Adjust Confidence levels, IoU thresholds, and position tolerance boundaries (in pixels).
-4. **Defect Toggler (Simulation)**: Check "Force Anomaly/Defect Mode" to switch output.
-   - **Unchecked (PASS)**: Displays a green PASS banner; component lists align perfectly.
-   - **Checked (FAIL)**: Simulates a board containing a missing MCU chip, a misaligned regulator, an extra capacitor, and a joint crack.
-5. **Tabs**: Switch between:
-   - **Original Camera View**: Displays clean grey PCB and components.
-   - **YOLO BBoxes**: Draws green (correct), yellow (misaligned), red crosshatch (missing), and pink (extra) borders.
-   - **YOLO-Seg Crack Overlay**: Fills semitransparent masks and draws blue solder cracks.
-6. **Ledgers**: Lists individual inventories and lists discrepancies in a table.
-7. **Report Downloading**: Generates on-the-fly PDF certificates, CSV registers, and JSON database logs.
+## 🏋️ Training & Fine-Tuning Models
 
----
+See [DATASET.md](DATASET.md) for how to structure your custom PCB images.
 
-## System Configurations (`config/config.yaml`)
-Customize parameters without touching code:
-```yaml
-inspection:
-  confidence: 0.50
-  iou: 0.45
-  position_tolerance: 15.0  # Euclidean pixel tolerance
-paths:
-  template_folder: "templates"
-  report_folder: "reports"
-  log_folder: "logs"
+### Train Component Detector
+To train the YOLO11m component detection model to recognize parts:
+```bash
+python train_component_yolo.py --data datasets/components/data.yaml --epochs 70 --batch 8
+```
+
+### Fine-Tune Defect Detector
+To fine-tune pre-trained component weights on defect datasets (e.g. solder joint issues or trace damage):
+```bash
+python finetune_defect_yolo.py
+```
+
+### Run Batch Defect Inference
+To execute batch inference on a folder of test PCB frames:
+```bash
+python inference_defect_yolo.py
 ```
 
 ---
 
-## Report Generator & File Export Factory
-Refactored using a Polymorphic Factory design pattern:
-- **Base class**: `BaseReportExporter`
-- **JSON**: Writes raw dictionary state.
-- **CSV**: Generates clean columns suitable for Excel or downstream logistics dashboards.
-- **PDF**: Employs ReportLab flowables to build multi-page tables, headers, and color-coded status blocks.
+## 🔧 Inspection Configuration (`config/config.yaml`)
+
+You can customize parameters directly without changing the codebase:
+```yaml
+inspection:
+  confidence: 0.50            # YOLO confidence threshold
+  iou: 0.45                   # Non-Maximum Suppression (NMS) IoU limit
+  position_tolerance: 15.0    # Default position checker boundary limit
+```
+
+---
+
+## 📈 Planned Work / Future Integration
+
+1. **OpenCV Perspective Preprocessor**: Implement homography transformation to align incoming frames automatically using board corner fiducials.
+2. **Defect Model Integration**: Move remaining defect checking tabs from mock generators to active deep learning inference once segmentation models are trained.
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
+
+## 👤 Author
+
+- **Kaushik Ajani**
+- **GitHub**: [kaushikajani3002-rgb](https://github.com/kaushikajani3002-rgb)
