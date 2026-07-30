@@ -1,0 +1,86 @@
+{
+    "board_name": "ESP32 DevKit",
+    "board_dimensions": {
+        "width_mm": 48.3,
+        "height_mm": 28.9,
+        "pixel_width": 640,
+        "pixel_height": 480
+    },
+    "total_critical_components": 9,
+    "description": "Standard ESP32 DevKit PCB template mapping 9 critical components.",
+    "components": [
+        {
+            "id": "esp_wroom_32_module",
+            "type": "IC",
+            "center_x_pct": 0.50,
+            "center_y_pct": 0.28,
+            "width_pct": 0.35,
+            "height_pct": 0.32,
+            "tolerance_override_mm": 1.2
+        },
+        {
+            "id": "uart_bridge_ic",
+            "type": "IC",
+            "center_x_pct": 0.50,
+            "center_y_pct": 0.65,
+            "width_pct": 0.12,
+            "height_pct": 0.12
+        },
+        {
+            "id": "micro_usb_port",
+            "type": "Connector",
+            "center_x_pct": 0.50,
+            "center_y_pct": 0.88,
+            "width_pct": 0.15,
+            "height_pct": 0.10
+        },
+        {
+            "id": "voltage_reg_3v3",
+            "type": "IC",
+            "center_x_pct": 0.28,
+            "center_y_pct": 0.65,
+            "width_pct": 0.08,
+            "height_pct": 0.10
+        },
+        {
+            "id": "en_reset_button",
+            "type": "Connector",
+            "center_x_pct": 0.32,
+            "center_y_pct": 0.78,
+            "width_pct": 0.08,
+            "height_pct": 0.08
+        },
+        {
+            "id": "boot_button",
+            "type": "Connector",
+            "center_x_pct": 0.68,
+            "center_y_pct": 0.78,
+            "width_pct": 0.08,
+            "height_pct": 0.08
+        },
+        {
+            "id": "male_header_strip_left",
+            "type": "Connector",
+            "center_x_pct": 0.05,
+            "center_y_pct": 0.50,
+            "width_pct": 0.05,
+            "height_pct": 0.85
+        },
+        {
+            "id": "male_header_strip_right",
+            "type": "Connector",
+            "center_x_pct": 0.95,
+            "center_y_pct": 0.50,
+            "width_pct": 0.05,
+            "height_pct": 0.85
+        },
+        {
+            "id": "power_led",
+            "type": "LED",
+            "center_x_pct": 0.24,
+            "center_y_pct": 0.55,
+            "width_pct": 0.04,
+            "height_pct": 0.04
+        }
+    ]
+}

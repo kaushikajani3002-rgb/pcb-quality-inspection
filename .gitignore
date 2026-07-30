@@ -1,0 +1,27 @@
+# Python build and cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+venv/
+.venv/
+env/
+.ipynb_checkpoints/
+
+# Streamlit configurations
+.streamlit/
+
+# AOI Output & Log Directories (relative to this directory)
+logs/
+reports/
+outputs/
+*.log
+
+# Model Weights and Large Binaries
+*.pt
+*.zip
+
+# VS Code / OS files
+.vscode/
+.DS_Store
+Thumbs.db

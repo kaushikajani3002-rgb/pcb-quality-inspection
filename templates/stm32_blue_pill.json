@@ -1,0 +1,94 @@
+{
+    "board_name": "STM32 Blue Pill",
+    "board_dimensions": {
+        "width_mm": 53.0,
+        "height_mm": 23.0,
+        "pixel_width": 640,
+        "pixel_height": 480
+    },
+    "total_critical_components": 10,
+    "description": "Standard STM32 Blue Pill PCB template mapping 10 critical components.",
+    "components": [
+        {
+            "id": "main_mcu_stm32",
+            "type": "IC",
+            "center_x_pct": 0.50,
+            "center_y_pct": 0.45,
+            "width_pct": 0.24,
+            "height_pct": 0.20,
+            "tolerance_override_mm": 1.0
+        },
+        {
+            "id": "micro_usb_port",
+            "type": "Connector",
+            "center_x_pct": 0.50,
+            "center_y_pct": 0.08,
+            "width_pct": 0.16,
+            "height_pct": 0.12
+        },
+        {
+            "id": "main_crystal_8mhz",
+            "type": "Connector",
+            "center_x_pct": 0.50,
+            "center_y_pct": 0.70,
+            "width_pct": 0.12,
+            "height_pct": 0.08
+        },
+        {
+            "id": "rtc_crystal",
+            "type": "Connector",
+            "center_x_pct": 0.28,
+            "center_y_pct": 0.72,
+            "width_pct": 0.05,
+            "height_pct": 0.10
+        },
+        {
+            "id": "voltage_reg_3v3",
+            "type": "IC",
+            "center_x_pct": 0.26,
+            "center_y_pct": 0.45,
+            "width_pct": 0.08,
+            "height_pct": 0.12
+        },
+        {
+            "id": "reset_button",
+            "type": "Connector",
+            "center_x_pct": 0.25,
+            "center_y_pct": 0.22,
+            "width_pct": 0.08,
+            "height_pct": 0.08
+        },
+        {
+            "id": "boot0_header",
+            "type": "Connector",
+            "center_x_pct": 0.75,
+            "center_y_pct": 0.20,
+            "width_pct": 0.08,
+            "height_pct": 0.06
+        },
+        {
+            "id": "boot1_header",
+            "type": "Connector",
+            "center_x_pct": 0.75,
+            "center_y_pct": 0.30,
+            "width_pct": 0.08,
+            "height_pct": 0.06
+        },
+        {
+            "id": "male_header_strip_left",
+            "type": "Connector",
+            "center_x_pct": 0.06,
+            "center_y_pct": 0.50,
+            "width_pct": 0.05,
+            "height_pct": 0.85
+        },
+        {
+            "id": "male_header_strip_right",
+            "type": "Connector",
+            "center_x_pct": 0.94,
+            "center_y_pct": 0.50,
+            "width_pct": 0.05,
+            "height_pct": 0.85
+        }
+    ]
+}

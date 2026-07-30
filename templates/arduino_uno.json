@@ -1,0 +1,126 @@
+{
+    "board_name": "Arduino Uno",
+    "board_dimensions": {
+        "width_mm": 68.6,
+        "height_mm": 53.4,
+        "pixel_width": 640,
+        "pixel_height": 480
+    },
+    "total_critical_components": 14,
+    "description": "Standard Arduino Uno Rev3 PCB template mapping 14 critical components.",
+    "components": [
+        {
+            "id": "main_mcu_atmega328p",
+            "type": "IC",
+            "center_x_pct": 0.55,
+            "center_y_pct": 0.45,
+            "width_pct": 0.10,
+            "height_pct": 0.35,
+            "tolerance_override_mm": 1.5
+        },
+        {
+            "id": "usb_interface_mcu",
+            "type": "IC",
+            "center_x_pct": 0.22,
+            "center_y_pct": 0.25,
+            "width_pct": 0.08,
+            "height_pct": 0.12
+        },
+        {
+            "id": "usb_type_b_port",
+            "type": "Connector",
+            "center_x_pct": 0.12,
+            "center_y_pct": 0.25,
+            "width_pct": 0.20,
+            "height_pct": 0.15
+        },
+        {
+            "id": "dc_barrel_jack",
+            "type": "Connector",
+            "center_x_pct": 0.15,
+            "center_y_pct": 0.75,
+            "width_pct": 0.22,
+            "height_pct": 0.20
+        },
+        {
+            "id": "voltage_reg_5v",
+            "type": "IC",
+            "center_x_pct": 0.35,
+            "center_y_pct": 0.70,
+            "width_pct": 0.07,
+            "height_pct": 0.12
+        },
+        {
+            "id": "voltage_reg_3v3",
+            "type": "IC",
+            "center_x_pct": 0.38,
+            "center_y_pct": 0.80,
+            "width_pct": 0.05,
+            "height_pct": 0.08
+        },
+        {
+            "id": "crystal_16mhz",
+            "type": "Connector",
+            "center_x_pct": 0.42,
+            "center_y_pct": 0.28,
+            "width_pct": 0.06,
+            "height_pct": 0.04
+        },
+        {
+            "id": "reset_button",
+            "type": "Connector",
+            "center_x_pct": 0.88,
+            "center_y_pct": 0.12,
+            "width_pct": 0.08,
+            "height_pct": 0.10
+        },
+        {
+            "id": "female_header_strip_1",
+            "type": "Connector",
+            "center_x_pct": 0.60,
+            "center_y_pct": 0.05,
+            "width_pct": 0.30,
+            "height_pct": 0.05
+        },
+        {
+            "id": "female_header_strip_2",
+            "type": "Connector",
+            "center_x_pct": 0.90,
+            "center_y_pct": 0.05,
+            "width_pct": 0.20,
+            "height_pct": 0.05
+        },
+        {
+            "id": "female_header_strip_3",
+            "type": "Connector",
+            "center_x_pct": 0.65,
+            "center_y_pct": 0.95,
+            "width_pct": 0.30,
+            "height_pct": 0.05
+        },
+        {
+            "id": "female_header_strip_4",
+            "type": "Connector",
+            "center_x_pct": 0.90,
+            "center_y_pct": 0.95,
+            "width_pct": 0.15,
+            "height_pct": 0.05
+        },
+        {
+            "id": "power_led",
+            "type": "LED",
+            "center_x_pct": 0.82,
+            "center_y_pct": 0.30,
+            "width_pct": 0.03,
+            "height_pct": 0.04
+        },
+        {
+            "id": "pin13_led",
+            "type": "LED",
+            "center_x_pct": 0.82,
+            "center_y_pct": 0.22,
+            "width_pct": 0.03,
+            "height_pct": 0.04
+        }
+    ]
+}

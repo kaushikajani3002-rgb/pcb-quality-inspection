@@ -1,0 +1,21 @@
+# PCB Automated Optical Inspection (AOI) System Configuration
+
+# Inspection Thresholds (AI/ML Mock Parameters)
+inspection:
+  confidence: 0.50
+  iou: 0.45
+  position_tolerance: 15.0  # Euclidean distance pixel tolerance for alignment checking
+
+# File System Directories (Paths are relative to project root or absolute)
+paths:
+  template_folder: "templates"
+  report_folder: "reports"
+  log_folder: "logs"
+  output_folder: "outputs"
+
+# Streamlit Industrial Dashboard Customizations
+dashboard:
+  theme: "dark"  # Options: dark, light
+  default_operator: "Operator_AOI_04"
+  company_name: "Anti-Gravity PCB Assembly Line"
+  logo_path: "assets/logo_placeholder.png"
