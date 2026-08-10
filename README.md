@@ -175,6 +175,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 ## 👤 Author
 
 - **Kaushik Ajani**
+- **Vidhi Rampura**
 - **Isha Kakadiya**
 - **Tushar Kacha**
 - **GitHub**: [kaushikajani3002-rgb](https://github.com/kaushikajani3002-rgb)
