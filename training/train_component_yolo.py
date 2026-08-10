@@ -17,9 +17,9 @@ from ultralytics import YOLO
 def parse_args():
     p = argparse.ArgumentParser(description="Train YOLO11m on PCB_AOI component detection dataset")
     p.add_argument("--data", type=str, required=False,
-                   default=r"d:\PCB\archive (1)\TDD-PCB\data.yaml",
+                   default=r"datasets/Master_PCB_Dataset/data.yaml",
                    help="Path to data.yaml describing train/val/test splits and component classes")
-    p.add_argument("--model", type=str, default="yolo11m.pt",
+    p.add_argument("--model", type=str, default="models/yolo11m.pt",
                    help="Starting weights. COCO-pretrained (yolo11m.pt) fine-tuning is strongly recommended")
     p.add_argument("--epochs", type=int, default=70)
     p.add_argument("--imgsz", type=int, default=640,
@@ -28,7 +28,7 @@ def parse_args():
                    help="Batch size (lower to 4 if facing GPU OOM)")
     p.add_argument("--device", type=str, default="-1",
                    help="'0' for first GPU, 'cpu' for CPU, '-1' for auto-selection")
-    p.add_argument("--project", type=str, default="DeepPCB_Output")
+    p.add_argument("--project", type=str, default="runs/train")
     p.add_argument("--name", type=str, default="pcb_components")
     p.add_argument("--patience", type=int, default=30)
     p.add_argument("--workers", type=int, default=4)

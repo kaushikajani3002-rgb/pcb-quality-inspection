@@ -1,0 +1,51 @@
+# PCB AOI Model Registry
+# This file tracks all trained model weights in the repository.
+
+models:
+  yolo11m:
+    path: "models/yolo11m.pt"
+    purpose: "COCO pre-trained base weights (not fine-tuned for PCB)"
+    status: "base_weights"
+    version: "v0"
+
+  yolo26n:
+    path: "models/yolo26n.pt"
+    purpose: "COCO pre-trained Nano weights (edge/fallback)"
+    status: "base_weights"
+    version: "v0"
+
+  component_yolo11m:
+    path: "models/component_yolo11m.pt"
+    purpose: "PCB component detection (IC, LED, Resistor, Capacitor, Connector, Crystal, Fuse)"
+    base_weights: "yolo11m.pt"
+    training_script: "training/train_component_yolo.py"
+    dataset: "Master_PCB_Dataset"
+    status: "not_trained"
+
+  deeppcb:
+    path: "models/deeppcb.pt"
+    purpose: "Trace defect detection"
+    training_script: "training/finetune_defect_yolo.py"
+    dataset: "DeepPCB"
+    classes: [Short, Open, MouseBite, Spur, SpuriousCopper]
+    status: "not_trained"
+
+  dspcbsd:
+    path: "models/dspcbsd.pt"
+    purpose: "9-class PCB defect segmentation"
+    training_script: "training/finetune_defect_yolo.py"
+    dataset: "DsPCBSD+"
+    classes: [Short, Spur, SpuriousCopper, Open, MouseBite, HoleBreakout, ConductorScratch, ConductorForeignObject, BaseMaterialForeignObject]
+    status: "not_trained"
+
+  hripcb:
+    path: "models/hripcb.pt"
+    purpose: "High-resolution PCB defect detection"
+    dataset: "HRIPCB"
+    status: "not_trained"
+
+  tddpcb:
+    path: "models/tddpcb.pt"
+    purpose: "Aligned-board defect detection"
+    dataset: "TDD-PCB"
+    status: "not_trained"

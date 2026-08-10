@@ -11,17 +11,28 @@ env/
 # Streamlit configurations
 .streamlit/
 
-# AOI Output & Log Directories (relative to this directory)
+# AOI Output & Log Directories
 logs/
 reports/
 outputs/
 *.log
 
-# Model Weights and Large Binaries
-*.pt
-*.zip
-
 # VS Code / OS files
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Large Binaries (global)
+*.zip
+
+# Local Datasets and Training Runs
+datasets/
+Dataset/
+infarance/
+runs/
+
+# Model weights are ignored (large binaries), but registry.yaml is tracked
+models/*.pt
+models/*.onnx
+models/*.engine
+!models/registry.yaml

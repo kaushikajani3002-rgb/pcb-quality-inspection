@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCB AOI System - Interactive Onboarding Guide</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #050505;
+            --bg-panel: rgba(20, 20, 25, 0.7);
+            --bg-glass: rgba(255, 255, 255, 0.05);
+            --bg-glass-hover: rgba(255, 255, 255, 0.08);
+            --text-main: #f5f5f7;
+            --text-muted: #86868b;
+            --accent-blue: #0A84FF;
+            --accent-purple: #bf5af2;
+            --accent-green: #30d158;
+            --border: rgba(255, 255, 255, 0.1);
+            --sidebar-width: 280px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            overflow-x: hidden;
+            display: flex;
+        }
+
+        /* Ambient Background */
+        .ambient {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1;
+            background: radial-gradient(circle at 10% 20%, rgba(10, 132, 255, 0.08), transparent 40%),
+                        radial-gradient(circle at 90% 80%, rgba(191, 90, 242, 0.08), transparent 40%);
+            animation: breathe 8s infinite alternate ease-in-out;
+        }
+        @keyframes breathe { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+
+        /* Sidebar */
+        #sidebar {
+            width: var(--sidebar-width); height: 100vh; position: fixed; top: 0; left: 0;
+            background: rgba(10,10,12,0.8); backdrop-filter: blur(20px); border-right: 1px solid var(--border);
+            padding: 2rem 1rem; overflow-y: auto; z-index: 100;
+        }
+        .nav-item {
+            padding: 0.8rem 1rem; margin-bottom: 0.5rem; border-radius: 8px; cursor: pointer;
+            color: var(--text-muted); font-size: 0.95rem; font-weight: 500; transition: 0.3s;
+        }
+        .nav-item:hover { background: var(--bg-glass-hover); color: var(--text-main); }
+        .nav-item.active { background: var(--bg-glass); color: var(--accent-blue); font-weight: 600; }
+
+        /* Main Content */
+        #main-content {
+            margin-left: var(--sidebar-width); width: calc(100% - var(--sidebar-width));
+            min-height: 100vh; padding: 4rem 5rem; display: flex; flex-direction: column; align-items: center;
+        }
+        .section { display: none; width: 100%; max-width: 1200px; animation: slideUp 0.5s ease-out forwards; }
+        .section.active { display: block; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+        h1 { font-size: 3.5rem; font-weight: 800; letter-spacing: -0.04em; margin-bottom: 1rem; background: linear-gradient(135deg, #fff, #a1a1a6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: 2rem; font-weight: 700; margin-bottom: 2rem; color: var(--accent-blue); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+        h3 { font-size: 1.4rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-main); }
+        p { font-size: 1.15rem; color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.7; }
+
+        /* Glass Cards */
+        .glass-card { background: var(--bg-panel); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; transition: 0.3s; margin-bottom: 2rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+
+        /* HTML/CSS Diagrams (No Mermaid) */
+        .flow-container { display: flex; flex-direction: column; align-items: center; gap: 1rem; margin: 2rem 0; width: 100%; overflow-x: auto; padding: 1rem; }
+        .flow-row { display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+        .flow-node {
+            background: var(--bg-glass); border: 1px solid var(--accent-blue); padding: 1rem 1.5rem;
+            border-radius: 12px; font-weight: 600; text-align: center; cursor: pointer; transition: 0.3s;
+            min-width: 200px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .flow-node:hover { transform: translateY(-3px); background: rgba(10, 132, 255, 0.2); }
+        .flow-node.active { background: rgba(10, 132, 255, 0.3); border-color: #fff; }
+        .flow-arrow { font-size: 1.5rem; color: var(--text-muted); }
+        .flow-arrow.down { transform: rotate(90deg); margin: 0.5rem 0; }
+
+        .details-panel { background: #111; border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-top: 2rem; width: 100%; display: none; }
+        .details-panel.active { display: block; animation: fade 0.3s; }
+        @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Explorer UI */
+        .explorer-ui { display: flex; height: 500px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .explorer-list { width: 35%; background: rgba(0,0,0,0.5); border-right: 1px solid var(--border); overflow-y: auto; padding: 1rem; }
+        .explorer-content { width: 65%; padding: 2rem; background: var(--bg-panel); overflow-y: auto; }
+        .exp-item { padding: 0.8rem 1rem; border-radius: 8px; cursor: pointer; color: var(--text-muted); transition: 0.2s; margin-bottom: 0.5rem; }
+        .exp-item:hover { background: var(--bg-glass-hover); color: var(--text-main); }
+        .exp-item.active { background: var(--bg-glass); color: var(--accent-blue); font-weight: 600; }
+        
+        .tag { display: inline-block; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; margin-right: 0.5rem; }
+        .tag-blue { background: rgba(10, 132, 255, 0.2); color: #82caff; border: 1px solid rgba(10, 132, 255, 0.4); }
+        .tag-purple { background: rgba(191, 90, 242, 0.2); color: #d8b4fe; border: 1px solid rgba(191, 90, 242, 0.4); }
+        .tag-green { background: rgba(48, 209, 88, 0.2); color: #86efac; border: 1px solid rgba(48, 209, 88, 0.4); }
+
+        /* Code/Text Blocks */
+        pre { background: rgba(0,0,0,0.8); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border); color: #a3be8c; font-family: 'Fira Code', monospace; overflow-x: auto; }
+
+        /* Button */
+        .btn-nav { background: var(--text-main); color: var(--bg-base); padding: 0.8rem 2rem; border-radius: 30px; border: none; font-weight: 600; cursor: pointer; margin-top: 3rem; transition: 0.3s; }
+        .btn-nav:hover { transform: scale(1.05); }
+
+    </style>
+</head>
+<body>
+
+<div class="ambient"></div>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+    <h3 style="margin-bottom: 2rem; text-align: center; font-weight: 800; font-size: 1.2rem; letter-spacing: -0.5px;">PCB AOI System</h3>
+    <div id="nav-container"></div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div id="main-content">
+
+    <!-- 1. OVERVIEW -->
+    <div class="section active" id="sec-1">
+        <h1>Project Overview</h1>
+        <p>Welcome to the team! This onboarding guide is your single source of truth for understanding the PCB AOI software infrastructure. </p>
+        
+        <div class="grid-2">
+            <div class="glass-card">
+                <h3 style="color: var(--accent-blue);">Why this project exists</h3>
+                <p>Manufacturing PCB boards at scale introduces physical defects (missing parts, misalignments, solder cracks). Human visual inspection is too slow and error-prone.</p>
+                <h3 style="color: var(--accent-blue); margin-top: 1.5rem;">The Problem it Solves</h3>
+                <p>It automates Quality Control (QC) by taking a raw camera image of a PCB, aligning it, detecting components via Deep Learning, and mathematically verifying them against a master JSON layout.</p>
+                <h3 style="color: var(--accent-blue); margin-top: 1.5rem;">Expected Users</h3>
+                <p>Factory line operators monitoring the dashboard, and Quality Assurance managers reviewing the exported PDF certificates.</p>
+            </div>
+            <div class="glass-card">
+                <h3 style="color: var(--accent-purple);">Input & Output</h3>
+                <div class="tag tag-blue">Input: High-res Camera Image</div>
+                <div class="tag tag-blue">Input: Template JSON (Coordinates)</div>
+                <div class="tag tag-green" style="margin-top: 1rem;">Output: PASS/FAIL UI State</div>
+                <div class="tag tag-green">Output: PDF/CSV Inspection Report</div>
+
+                <h3 style="color: var(--accent-purple); margin-top: 1.5rem;">Current Implementation</h3>
+                <p>The entire Streamlit UI, Configuration Loaders, Math Inspection Engine (Position/Missing/Extra checkers), and Exporters are built. The AI detection is currently simulated via a <strong>Mock Layer</strong>.</p>
+                
+                <h3 style="color: var(--accent-purple); margin-top: 1.5rem;">Future Implementation</h3>
+                <p>Integration of real OpenCV homography for alignment, YOLOv11 for bounding box inference, and segmentation models for crack detection.</p>
+            </div>
+        </div>
+        <button class="btn-nav" onclick="navTo(2)">Next: Project Workflow</button>
+    </div>
+
+    <!-- 2. PROJECT WORKFLOW -->
+    <div class="section" id="sec-2">
+        <h1>Project Workflow (The Big Picture)</h1>
+        <p>This is the interactive pipeline of how the system operates from a high level. <strong>Click any box to see exactly what happens under the hood.</strong></p>
+        
+        <div class="glass-card">
+            <div class="flow-container" id="workflow-ui">
+                <!-- JS Populated -->
+            </div>
+            <div class="details-panel" id="workflow-details">
+                <h3 style="color: var(--accent-blue);">Click a node above</h3>
+                <p>Details regarding purpose, inputs, outputs, and files involved will appear here.</p>
+            </div>
+        </div>
+        <button class="btn-nav" onclick="navTo(3)">Next: Runtime Flow</button>
+    </div>
+
+    <!-- 3. RUNTIME FLOW -->
+    <div class="section" id="sec-3">
+        <h1>Runtime Execution Order</h1>
+        <p>When the operator types <code>streamlit run app/main.py</code>, this is the EXACT chronological order of execution based on our project architecture.</p>
+        
+        <div class="glass-card">
+            <div class="flow-container">
+                <div class="flow-node" style="border-color: #fff;">1. main.py</div>
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node">2. utils/config_loader.py</div>
+                <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-top:-0.5rem; margin-bottom:0.5rem;">Loads tolerances (mm limits, confidence thresholds) from config.yaml</p>
+                
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node">3. utils/template_manager.py</div>
+                <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-top:-0.5rem; margin-bottom:0.5rem;">Loads the JSON blueprint for the selected board.</p>
+
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node" style="border-color: var(--accent-purple);">4. Wait for Operator Input</div>
+                <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-top:-0.5rem; margin-bottom:0.5rem;">Operator uploads an image in Streamlit.</p>
+
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node">5. mock/mock_results.py</div>
+                <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-top:-0.5rem; margin-bottom:0.5rem;">Currently intercepts the image and generates fake YOLO bounding boxes for testing.</p>
+
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node" style="border-color: var(--accent-green);">6. inspection/inspection_engine.py</div>
+                <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-top:-0.5rem; margin-bottom:0.5rem;">Executes Position, Missing, and Extra checkers against the mock data.</p>
+
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node">7. utils/report_exporter.py</div>
+                <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-top:-0.5rem; margin-bottom:0.5rem;">Saves the final discrepancy payload to PDF and CSV.</p>
+
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node" style="border-color: #fff;">8. Dashboard Updates</div>
+                <p style="text-align:center; color:var(--text-muted); font-size:0.9rem; margin-top:-0.5rem; margin-bottom:0.5rem;">UI renders PASS/FAIL state and draws bounding boxes on the canvas.</p>
+            </div>
+        </div>
+        <button class="btn-nav" onclick="navTo(4)">Next: Folder Explorer</button>
+    </div>
+
+    <!-- 4. FOLDER EXPLORER -->
+    <div class="section" id="sec-4">
+        <h1>Folder Explorer</h1>
+        <p>The project follows Clean Architecture. Folders have strict separation of concerns. Explore them below.</p>
+        <div class="explorer-ui glass-card" style="padding:0; border:1px solid var(--border);">
+            <div class="explorer-list" id="folder-list"></div>
+            <div class="explorer-content" id="folder-details">Select a folder to view its responsibilities.</div>
+        </div>
+        <button class="btn-nav" onclick="navTo(5)">Next: File Explorer</button>
+    </div>
+
+    <!-- 5. FILE EXPLORER -->
+    <div class="section" id="sec-5">
+        <h1>File Explorer</h1>
+        <p>Dive into the critical Python files. Understand their exact I/O and dependencies.</p>
+        <div class="explorer-ui glass-card" style="padding:0; border:1px solid var(--border);">
+            <div class="explorer-list" id="file-list"></div>
+            <div class="explorer-content" id="file-details">Select a file to view its implementation details.</div>
+        </div>
+        <button class="btn-nav" onclick="navTo(6)">Next: End-to-End Data Flow</button>
+    </div>
+
+    <!-- 6. END TO END DATA FLOW -->
+    <div class="section" id="sec-6">
+        <h1>End-to-End Data Flow (One Image's Journey)</h1>
+        <p>Let's follow the data transformation of a single uploaded image.</p>
+        
+        <div class="glass-card">
+            <div class="flow-container">
+                <div style="background: rgba(10,132,255,0.1); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; width: 100%; text-align: left;">
+                    <h3 style="color: var(--accent-blue);">1. Upload Image (UI)</h3>
+                    <p><strong>Enters:</strong> Raw `.jpg` or `.png` byte stream.<br><strong>Changes:</strong> UI holds the image in memory.<br><strong>Leaves:</strong> Image bytes passed to validation.</p>
+                </div>
+                
+                <div class="flow-arrow down">↓</div>
+
+                <div style="background: rgba(10,132,255,0.1); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; width: 100%; text-align: left;">
+                    <h3 style="color: var(--accent-blue);">2. Detection Simulation (Mock Layer)</h3>
+                    <p><strong>Enters:</strong> Image bytes.<br><strong>Changes:</strong> System generates synthetic bounding boxes formatted exactly like YOLO output.<br><strong>Leaves:</strong> Array of objects: <code>[{"class":"IC", "bbox":{"x":0.5, "y":0.5}}]</code></p>
+                </div>
+
+                <div class="flow-arrow down">↓</div>
+
+                <div style="background: rgba(191,90,242,0.1); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; width: 100%; text-align: left;">
+                    <h3 style="color: var(--accent-purple);">3. Inspection Engine (Core Logic)</h3>
+                    <p><strong>Enters:</strong> YOLO array + JSON Template coordinates.<br><strong>Changes:</strong> Engine calculates Euclidean distances in physical millimeters. Finds missing elements.<br><strong>Leaves:</strong> Aggregated Dictionary containing `status: FAIL` and `discrepancies: [...]`</p>
+                </div>
+
+                <div class="flow-arrow down">↓</div>
+
+                <div style="background: rgba(48,209,88,0.1); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; width: 100%; text-align: left;">
+                    <h3 style="color: var(--accent-green);">4. Output & Reporting</h3>
+                    <p><strong>Enters:</strong> Aggregated Dictionary.<br><strong>Changes:</strong> Exporter formats data into a PDF. Streamlit UI updates its state machine.<br><strong>Leaves:</strong> PDF saved to disk. Bounding boxes rendered visually on screen.</p>
+                </div>
+            </div>
+        </div>
+        <button class="btn-nav" onclick="navTo(7)">Next: Current Architecture</button>
+    </div>
+
+    <!-- 7. CURRENT ARCHITECTURE -->
+    <div class="section" id="sec-7">
+        <h1>Current Architecture (What Exists Today)</h1>
+        <p>The foundation is fully built and tested using a Mock-First approach.</p>
+        <div class="glass-card">
+            <h3 style="color: var(--accent-green);">The Decoupled System</h3>
+            <p>Our architecture proves that the UI does not care where the detection data comes from. Currently, <code>app/main.py</code> receives data from <code>mock/mock_results.py</code>.</p>
+            <p>The <code>inspection/inspection_engine.py</code> successfully processes this simulated data and accurately generates PDF reports using <code>utils/report_exporter.py</code>.</p>
+            <p>This means the backend infrastructure is 100% ready to receive real AI models without needing to rewrite the UI or the Exporters.</p>
+        </div>
+        <button class="btn-nav" onclick="navTo(8)">Next: Future AI Integration</button>
+    </div>
+
+    <!-- 8. FUTURE INTEGRATION -->
+    <div class="section" id="sec-8">
+        <h1>Future AI Integration</h1>
+        <p>This is where the real Computer Vision happens. When we move to production, we will delete the Mock Layer and plug in the following modules.</p>
+        
+        <div class="glass-card" style="border: 2px dashed var(--accent-purple);">
+            <div class="flow-container">
+                <div class="flow-node" style="background: #111;">1. Industrial Camera Feed</div>
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node" style="border-color: var(--accent-purple);">2. OpenCV Alignment (preprocessor.py)</div>
+                <p style="color: var(--text-muted); font-size: 0.95rem;">Uses Homography to deskew the image to match JSON dimensions.</p>
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node" style="border-color: var(--accent-purple);">3. YOLO Detection (detection_engine.py)</div>
+                <p style="color: var(--text-muted); font-size: 0.95rem;">Replaces mock_results.py. Runs inference to find BBoxes.</p>
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node" style="border-color: var(--accent-purple);">4. Defect Segmentation (DeepPCB)</div>
+                <p style="color: var(--text-muted); font-size: 0.95rem;">Secondary models to catch microscopic thermal cracks.</p>
+                <div class="flow-arrow down">↓</div>
+                <div class="flow-node" style="border-color: var(--accent-green);">5. Plugs into existing Inspection Engine</div>
+            </div>
+        </div>
+        <button class="btn-nav" onclick="navTo(9)">Next: Dependency Explorer</button>
+    </div>
+
+    <!-- 9. DEPENDENCY EXPLORER -->
+    <div class="section" id="sec-9">
+        <h1>Dependency Explorer</h1>
+        <p>Understand how modules rely on each other. (Click to highlight incoming/outgoing data flows).</p>
+        <div class="glass-card" style="text-align: center; padding: 4rem;">
+            <p style="color: var(--accent-blue); font-weight: 600; font-size: 1.2rem;">Interactive Dependency Graph</p>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 3rem; margin-top: 2rem;">
+                <div style="padding: 1rem; border: 1px solid var(--border); border-radius: 8px;">UI (main.py)</div>
+                <div class="flow-arrow">→</div>
+                <div style="padding: 1rem; border: 1px solid var(--accent-purple); border-radius: 8px;">Mock / YOLO Engine</div>
+                <div class="flow-arrow">→</div>
+                <div style="padding: 1rem; border: 1px solid var(--accent-green); border-radius: 8px;">Inspection Engine</div>
+                <div class="flow-arrow">→</div>
+                <div style="padding: 1rem; border: 1px solid var(--border); border-radius: 8px;">Report Exporter</div>
+            </div>
+            <p style="margin-top: 2rem; font-size: 0.9rem; color: var(--text-muted);">*Notice how the Inspection Engine strictly depends on the Engine (Mock/YOLO) output, but knows nothing about the UI.*</p>
+        </div>
+        <button class="btn-nav" onclick="navTo(10)">Next: Project Timeline Summary</button>
+    </div>
+
+    <!-- 10. PROJECT SUMMARY -->
+    <div class="section" id="sec-10">
+        <h1>Project Summary & Timeline</h1>
+        <p>The complete end-to-end timeline of the PCB AOI System.</p>
+        
+        <div class="glass-card">
+            <div style="border-left: 2px solid var(--accent-blue); padding-left: 2rem; margin-left: 1rem;">
+                <h3 style="color: var(--text-main); margin-bottom: 0.2rem;">T=0s : Initialization</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem;"><code>main.py</code> boots Streamlit. Loads config & JSON templates.</p>
+
+                <h3 style="color: var(--text-main); margin-bottom: 0.2rem;">T=1s : Image Upload</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem;">User uploads PCB photo. Passed to <code>validators.py</code>.</p>
+
+                <h3 style="color: var(--text-main); margin-bottom: 0.2rem;">T=2s : Alignment (Future)</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem;">OpenCV straightens the image in <code>preprocessor.py</code>.</p>
+
+                <h3 style="color: var(--text-main); margin-bottom: 0.2rem;">T=3s : AI Inference (Current Mock)</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem;">System gets bounding boxes via Mock Layer (or YOLO).</p>
+
+                <h3 style="color: var(--accent-green); margin-bottom: 0.2rem;">T=4s : Math Verification</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem;"><code>inspection_engine.py</code> loops through BBoxes. Checks mm distances.</p>
+
+                <h3 style="color: var(--accent-purple); margin-bottom: 0.2rem;">T=5s : Report Generation</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem;"><code>report_exporter.py</code> builds PDF. UI renders final PASS/FAIL visual.</p>
+            </div>
+        </div>
+        <p style="text-align: center; font-size: 1.5rem; font-weight: 800; color: var(--accent-green);">You are now fully onboarded!</p>
+    </div>
+
+</div>
+
+<script>
+    // --- Navigation Logic ---
+    const totalSections = 10;
+    const sections = ['Project Overview', 'Project Workflow', 'Runtime Flow', 'Folder Explorer', 'File Explorer', 'Data Flow', 'Current Architecture', 'Future Integration', 'Dependencies', 'Summary'];
+    
+    const navCont = document.getElementById('nav-container');
+    sections.forEach((title, idx) => {
+        let d = document.createElement('div');
+        d.className = `nav-item ${idx===0 ? 'active':''}`;
+        d.id = `nav-${idx+1}`;
+        d.innerText = `${idx+1}. ${title}`;
+        d.onclick = () => navTo(idx+1);
+        navCont.appendChild(d);
+    });
+
+    function navTo(num) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById(`sec-${num}`).classList.add('active');
+        document.getElementById(`nav-${num}`).classList.add('active');
+        window.scrollTo(0,0);
+    }
+
+    // --- Workflow Data ---
+    const workflowData = [
+        { id: 'Upload', title: 'Upload Image', purp: 'Receives the raw image from user.', in: 'User JPG/PNG', out: 'Image Bytes', mod: 'Streamlit UI', files: 'main.py' },
+        { id: 'Validate', title: 'Image Validation', purp: 'Ensures file is not corrupt.', in: 'Image Bytes', out: 'Boolean (True)', mod: 'Utils', files: 'validators.py' },
+        { id: 'Template', title: 'Template Selection', purp: 'Loads expected coordinates.', in: 'Board Name', out: 'JSON Dict', mod: 'Utils', files: 'template_manager.py' },
+        { id: 'Detect', title: 'Component Detection', purp: 'Simulates AI bounding boxes.', in: 'Image Bytes', out: 'Array of BBoxes', mod: 'Mock Layer', files: 'mock_results.py' },
+        { id: 'Inspect', title: 'Inspection Engine', purp: 'Verifies actual vs expected.', in: 'BBoxes + JSON', out: 'Results Dict', mod: 'Inspection Engine', files: 'inspection_engine.py, position_checker.py' },
+        { id: 'Report', title: 'Generate Report', purp: 'Creates industrial logs.', in: 'Results Dict', out: 'PDF File', mod: 'Utils', files: 'report_exporter.py' }
+    ];
+
+    const wfUI = document.getElementById('workflow-ui');
+    workflowData.forEach((w, i) => {
+        let row = document.createElement('div');
+        row.style.display = 'flex'; row.style.flexDirection = 'column'; row.style.alignItems = 'center';
+        
+        let node = document.createElement('div');
+        node.className = 'flow-node'; node.innerText = w.title;
+        node.onclick = () => showWf(i, node);
+        row.appendChild(node);
+
+        if(i < workflowData.length-1) {
+            let arr = document.createElement('div');
+            arr.className = 'flow-arrow down'; arr.innerText = '↓';
+            row.appendChild(arr);
+        }
+        wfUI.appendChild(row);
+    });
+
+    function showWf(idx, el) {
+        document.querySelectorAll('.flow-node').forEach(n => n.classList.remove('active'));
+        el.classList.add('active');
+        const w = workflowData[idx];
+        const panel = document.getElementById('workflow-details');
+        panel.innerHTML = `
+            <h3 style="color: var(--accent-blue); margin-bottom:1rem;">${w.title}</h3>
+            <div class="grid-2" style="text-align:left;">
+                <div><span class="tag tag-blue">Purpose</span><br>${w.purp}</div>
+                <div><span class="tag tag-blue">Responsible Module</span><br>${w.mod}</div>
+                <div><span class="tag tag-green">Input</span><br>${w.in}</div>
+                <div><span class="tag tag-purple">Output</span><br>${w.out}</div>
+            </div>
+            <p style="margin-top:1.5rem; text-align:left; border-top:1px solid #333; padding-top:1rem;"><strong>Files Involved:</strong> <code>${w.files}</code></p>
+        `;
+        panel.classList.add('active');
+    }
+
+    // --- Folder Data ---
+    const fData = [
+        { name: 'app/', purp: 'Holds the frontend presentation layer.', resp: 'Rendering Streamlit UI, state management.', deps: 'inspection/, utils/', uses: 'None (Top of hierarchy)' },
+        { name: 'inspection/', purp: 'Core business logic.', resp: 'Executing math to find missing/misaligned parts.', deps: 'utils/constants.py', uses: 'app/' },
+        { name: 'mock/', purp: 'Simulates AI for testing.', resp: 'Returning fake YOLO data to build UI rapidly.', deps: 'None', uses: 'app/' },
+        { name: 'utils/', purp: 'Shared helpers.', resp: 'Loading JSONs, exporting PDFs, validating files.', deps: 'None', uses: 'app/, inspection/' }
+    ];
+    const fList = document.getElementById('folder-list');
+    fData.forEach((f, i) => {
+        let el = document.createElement('div');
+        el.className = `exp-item ${i===0?'active':''}`; el.innerText = f.name;
+        el.onclick = () => showF(i, el); fList.appendChild(el);
+    });
+    function showF(idx, el) {
+        document.querySelectorAll('#folder-list .exp-item').forEach(n=>n.classList.remove('active')); el.classList.add('active');
+        const d = fData[idx];
+        document.getElementById('folder-details').innerHTML = `
+            <h3 style="color:white; margin-bottom:1rem;">${d.name}</h3>
+            <p><strong>Why it exists:</strong> ${d.purp}</p>
+            <p><strong>Responsibility:</strong> ${d.resp}</p>
+            <p><strong>Folders it depends on:</strong> ${d.deps}</p>
+            <p><strong>Folders that use it:</strong> ${d.uses}</p>
+        `;
+    }
+    showF(0, fList.firstChild);
+
+    // --- File Data ---
+    const fileData = [
+        { name: 'main.py', purp: 'Entry point for the application.', resp: 'Operator dashboard.', in: 'User actions', out: 'UI Render', callby: 'User CLI', calls: 'inspection_engine, config_loader' },
+        { name: 'inspection_engine.py', purp: 'The brain of the system.', resp: 'Runs coordinate math.', in: 'BBoxes, JSON', out: 'Dict (Results)', callby: 'main.py', calls: 'position_checker, missing_checker' },
+        { name: 'report_exporter.py', purp: 'Documentation generator.', resp: 'Formats logic output into PDF.', in: 'Results Dict', out: 'PDF File', callby: 'main.py', calls: 'ReportLab library' }
+    ];
+    const fiList = document.getElementById('file-list');
+    fileData.forEach((f, i) => {
+        let el = document.createElement('div');
+        el.className = `exp-item ${i===0?'active':''}`; el.innerText = f.name;
+        el.onclick = () => showFi(i, el); fiList.appendChild(el);
+    });
+    function showFi(idx, el) {
+        document.querySelectorAll('#file-list .exp-item').forEach(n=>n.classList.remove('active')); el.classList.add('active');
+        const d = fileData[idx];
+        document.getElementById('file-details').innerHTML = `
+            <h3 style="color:white; margin-bottom:1rem;">${d.name}</h3>
+            <p><strong>Purpose:</strong> ${d.purp}</p>
+            <div class="grid-2">
+                <div><span class="tag tag-green">Input</span><br>${d.in}</div>
+                <div><span class="tag tag-purple">Output</span><br>${d.out}</div>
+                <div><span class="tag tag-blue">Called By</span><br>${d.callby}</div>
+                <div><span class="tag tag-blue">It Calls</span><br>${d.calls}</div>
+            </div>
+        `;
+    }
+    showFi(0, fiList.firstChild);
+
+</script>
+</body>
+</html>

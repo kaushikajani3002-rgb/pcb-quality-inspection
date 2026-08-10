@@ -36,7 +36,7 @@ from utils.constants import (
 )
 from mock.mock_results import MockInspectionService
 from inspection.inspection_engine import InspectionEngine
-from detection_engine import (
+from ai.detection_engine import (
     load_model, run_component_counting, run_defect_detection,
     build_inventory_table, compute_dashboard_metrics
 )

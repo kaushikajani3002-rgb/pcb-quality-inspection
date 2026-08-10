@@ -10,11 +10,11 @@ from inspection.inspection_engine import InspectionEngine
 
 # Dictionary of model paths. The user will share/fill the paths.
 MODEL_PATHS = {
-    "Component": "",  # Path to be configured by the user
-    "DeepPCB": "",
-    "DsPCBSD+": "",
-    "HRIPCB": "",
-    "TDD-PCB": ""
+    "Component": "models/component_yolo11m.pt",
+    "DeepPCB": "models/deeppcb.pt",
+    "DsPCBSD+": "models/dspcbsd.pt",
+    "HRIPCB": "models/hripcb.pt",
+    "TDD-PCB": "models/tddpcb.pt"
 }
 
 # Trained class names to template component type strings mapping
