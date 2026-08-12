@@ -66,16 +66,38 @@ except Exception as e:
     print(f"❌ Mock Inspection failed: {e}")
     sys.exit(1)
 
-print("\nStep 5: Testing AI detection model path checking for all models...")
+print("\nStep 5: Testing AI detection model loading for all 5 real models...")
 try:
     for model_name in ["Component", "DeepPCB", "DsPCBSD+", "HRIPCB", "TDD-PCB"]:
         model = load_model(model_name)
-        print(f"  Loaded '{model_name}' model: {model}")
         if model is None:
-            print(f"  ⚠ Model '{model_name}' weights not found on disk (expected if weights are not downloaded).")
-    print("✔ Model path resolution succeeded! (weights absent = simulation fallback)")
+            raise ValueError(f"Failed to load model '{model_name}' from disk.")
+        
+        # Get path
+        config = ConfigLoader()
+        if model_name == "Component":
+            path_rel = config.get("models.component_model.path")
+        else:
+            defect_mapping = config.get("models.defect_mapping") or {}
+            path_rel = None
+            for key, val in defect_mapping.items():
+                if isinstance(val, dict) and val.get("name") == model_name:
+                    path_rel = val.get("path")
+                    break
+        if not path_rel:
+            path_rel = MODEL_PATHS.get(model_name, "")
+            
+        abs_path = config.project_root / path_rel
+        num_classes = len(model.names)
+        class_names = list(model.names.values())
+        
+        print(f"  ✔ {model_name} -> SUCCESS")
+        print(f"    - Path: {abs_path}")
+        print(f"    - Classes Count: {num_classes}")
+        print(f"    - Class Names: {class_names}")
+    print("✔ Real model loading test succeeded!")
 except Exception as e:
-    print(f"❌ Model path check failed: {e}")
+    print(f"❌ Real model loading failed: {e}")
     sys.exit(1)
 
 print("\nStep 6: Testing PCB template → defect model mapping...")

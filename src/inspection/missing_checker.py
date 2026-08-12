@@ -27,10 +27,14 @@ class MissingChecker:
                 missing_components.append({
                     "id": e_id,
                     "type": e.get("type", "Unknown"),
-                    "expected_x": e.get("center_x"),
-                    "expected_y": e.get("center_y"),
-                    "width": e.get("width"),
-                    "height": e.get("height"),
+                    "expected_x_pct": e.get("center_x_pct", 0.0),
+                    "expected_y_pct": e.get("center_y_pct", 0.0),
+                    "width_pct": e.get("width_pct", 0.0),
+                    "height_pct": e.get("height_pct", 0.0),
+                    "expected_x": e.get("center_x_pct", 0.0),
+                    "expected_y": e.get("center_y_pct", 0.0),
+                    "width": e.get("width_pct", 0.0),
+                    "height": e.get("height_pct", 0.0),
                     "reason": "Missing component at expected coordinates"
                 })
                 

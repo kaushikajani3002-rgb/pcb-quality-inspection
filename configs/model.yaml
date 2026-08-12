@@ -4,17 +4,17 @@ models:
     yolo26n: models/pretrained/yolo26n.pt
   component_model:
     name: Component
-    path: models/trained/component_detector_best.pt
+    path: models/trained/Component/All_cercit_finetuned_best.pt
   defect_mapping:
     arduino_uno:
       name: DeepPCB
-      path: models/trained/deeppcb_best.pt
+      path: models/trained/DeepPCB/DeepPCB.pt
     esp32_devkit:
       name: DsPCBSD+
-      path: models/trained/dspcbsd_best.pt
+      path: models/trained/DsPCBSD+/DsPCBSD+.pt
     stm32_blue_pill:
       name: HRIPCB
-      path: models/trained/hripcb_best.pt
+      path: models/trained/HRIPCB/HRIPCB.pt
     generic_pcb:
       name: TDD-PCB
-      path: models/trained/tddpcb_best.pt
+      path: models/trained/TDD-PCB/PDD-PCB-best.pt

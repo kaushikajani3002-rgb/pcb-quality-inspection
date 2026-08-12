@@ -10,16 +10,41 @@ from src.inspection.inspection_engine import InspectionEngine
 
 # Dictionary of model paths. Mapped to configs/model.yaml defaults.
 MODEL_PATHS = {
-    "Component": "models/trained/component_detector_best.pt",
-    "DeepPCB": "models/trained/deeppcb_best.pt",
-    "DsPCBSD+": "models/trained/dspcbsd_best.pt",
-    "HRIPCB": "models/trained/hripcb_best.pt",
-    "TDD-PCB": "models/trained/tddpcb_best.pt"
+    "Component": "models/trained/Component/All_cercit_finetuned_best.pt",
+    "DeepPCB": "models/trained/DeepPCB/DeepPCB.pt",
+    "DsPCBSD+": "models/trained/DsPCBSD+/DsPCBSD+.pt",
+    "HRIPCB": "models/trained/HRIPCB/HRIPCB.pt",
+    "TDD-PCB": "models/trained/TDD-PCB/PDD-PCB-best.pt"
 }
 
 # Trained class names to template component type strings mapping
-# (Will be updated once we load models/component_yolo11m.pt and inspect model.names)
 CLASS_NAME_MAP = {}
+
+def map_class_to_component_type(class_name: str) -> str:
+    """
+    Maps 58 YOLO component model class names (e.g. 'Capacitor 104J', 'IC 555')
+    to general component type strings corresponding to expected template categories ('IC', 'Resistor', 'Capacitor', 'LED', 'Connector').
+    """
+    name_lower = class_name.lower()
+    if "resistor" in name_lower:
+        return "Resistor"
+    if "capacitor" in name_lower:
+        return "Capacitor"
+    if "ic" in name_lower or "lm324n" in name_lower or "4017" in name_lower or "555" in name_lower or "l7805cv" in name_lower:
+        return "IC"
+    if "led" in name_lower:
+        return "LED"
+    if "diode" in name_lower:
+        return "Diode"
+    if "transistor" in name_lower:
+        return "Transistor"
+    if "pushbutton" in name_lower or "relay" in name_lower or "button" in name_lower or "jack" in name_lower or "port" in name_lower or "connector" in name_lower or "fuse" in name_lower or "crystal" in name_lower:
+        return "Connector"
+    if "transformer" in name_lower:
+        return "Transformer"
+    if "vr" in name_lower:
+        return "VR"
+    return class_name
 
 def load_model(model_name: str) -> Any:
     """
@@ -32,7 +57,15 @@ def load_model(model_name: str) -> Any:
     path = ""
     try:
         config = ConfigLoader()
-        path_rel = config.get(f"models.trained.{model_name}")
+        if model_name == "Component":
+            path_rel = config.get("models.component_model.path")
+        else:
+            defect_mapping = config.get("models.defect_mapping") or {}
+            path_rel = None
+            for key, val in defect_mapping.items():
+                if isinstance(val, dict) and val.get("name") == model_name:
+                    path_rel = val.get("path")
+                    break
         if path_rel:
             path = str(config.project_root / path_rel)
     except Exception:
@@ -216,7 +249,7 @@ def run_component_counting(
                 class_name = component_model.names.get(cls_id, f"Class {cls_id}")
                 
                 # Apply class mapping
-                mapped_type = CLASS_NAME_MAP.get(class_name, class_name)
+                mapped_type = map_class_to_component_type(class_name)
                 
                 # Extract normalized coordinates (xywhn is center_x, center_y, width, height normalized)
                 xywhn = box.xywhn[0].tolist()

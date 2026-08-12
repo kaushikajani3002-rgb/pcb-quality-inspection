@@ -213,28 +213,46 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.subheader("Simulation Options")
+    st.subheader("Model Status")
     
+    # Check if component detector weights exist on disk
+    comp_config = config.get("models.component_model")
+    if isinstance(comp_config, dict):
+        comp_path_rel = comp_config.get("path")
+    else:
+        comp_path_rel = "models/trained/Component/All_cercit_finetuned_best.pt"
+    comp_exists = (config.project_root / comp_path_rel).exists() if comp_path_rel else False
+
     # Auto-resolved defect model from PCB template (via on_template_change callback)
     selected_defect_model_lbl = st.session_state.selected_defect_model
-    
-    # Display as non-interactive informational label
-    st.markdown(f"**Defect Model:** `{selected_defect_model_lbl}`")
-    
-    # Check if the auto-selected model weights exist on disk
-    if selected_defect_model_lbl and selected_defect_model_lbl != "None":
-        mapping_entry = config.get(f"models.defect_mapping.{selected_template_stem}")
-        if isinstance(mapping_entry, dict):
-            model_path_rel = mapping_entry.get("path")
-        else:
-            model_path_rel = config.get(f"models.trained.{selected_defect_model_lbl}")
-            
-        if model_path_rel:
-            resolved_path = config.project_root / model_path_rel
-            if not resolved_path.exists():
-                st.warning(f"⚠️ Model '{selected_defect_model_lbl}' weights not found. Using simulation fallback.")
-        else:
-            st.warning(f"⚠️ No defect model configured for this PCB profile. Using simulation fallback.")
+
+    # Check if defect detector weights exist on disk
+    defect_mapping = config.get("models.defect_mapping") or {}
+    mapping_entry = defect_mapping.get(selected_template_stem)
+    if isinstance(mapping_entry, dict):
+        def_path_rel = mapping_entry.get("path")
+    else:
+        def_path_rel = None
+    def_exists = (config.project_root / def_path_rel).exists() if def_path_rel else False
+
+    # Display status with colors
+    if comp_exists:
+        st.markdown("<span style='color:#10b981; font-weight:bold;'>Component Detector ✓ Ready</span>", unsafe_allow_html=True)
+    else:
+        st.markdown("<span style='color:#ef4444; font-weight:bold;'>Component Detector ✗ Missing</span>", unsafe_allow_html=True)
+
+    if def_exists:
+        st.markdown(f"<span style='color:#10b981; font-weight:bold;'>Defect Detector ✓ Ready</span> (`{selected_defect_model_lbl}`)", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>Defect Detector ✗ Missing</span> (`{selected_defect_model_lbl}`)", unsafe_allow_html=True)
+
+    if not comp_exists:
+        st.warning(f"⚠️ Component weights not found at '{comp_path_rel}'. Component detection will fallback to mock.")
+    if not def_exists:
+        st.warning(f"⚠️ Defect weights not found at '{def_path_rel}'. Defect checks will fallback to mock.")
+
+    st.markdown("---")
+    st.subheader("Simulation Options")
 
     defect_mode = st.checkbox(
         "Force Anomaly/Defect Mode", 
