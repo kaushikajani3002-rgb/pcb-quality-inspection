@@ -123,7 +123,8 @@ def on_template_change():
     device_options = {
         "Arduino Uno": "arduino_uno",
         "ESP32 DevKit": "esp32_devkit",
-        "STM32 Blue Pill": "stm32_blue_pill"
+        "STM32 Blue Pill": "stm32_blue_pill",
+        "Generic PCB": "generic_pcb"
     }
     stem = device_options.get(new_template_lbl, "generic")
     default_model = config.get(f"models.defect_mapping.{stem}", "TDD-PCB")
@@ -154,7 +155,8 @@ with st.sidebar:
     device_options = {
         "Arduino Uno": "arduino_uno",
         "ESP32 DevKit": "esp32_devkit",
-        "STM32 Blue Pill": "stm32_blue_pill"
+        "STM32 Blue Pill": "stm32_blue_pill",
+        "Generic PCB": "generic_pcb"
     }
     
     try:

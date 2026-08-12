@@ -1,0 +1,12 @@
+{
+    "board_name": "Generic PCB",
+    "board_dimensions": {
+        "width_mm": 100.0,
+        "height_mm": 100.0,
+        "pixel_width": 640,
+        "pixel_height": 640
+    },
+    "total_critical_components": 0,
+    "description": "Generic PCB profile for defect-only inspection (TDD-PCB). No expected component layout.",
+    "components": []
+}

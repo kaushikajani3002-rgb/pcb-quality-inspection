@@ -87,6 +87,19 @@ STM32_BLUE_PILL_DEFAULT = {
     ]
 }
 
+GENERIC_PCB_DEFAULT = {
+    "board_name": "Generic PCB",
+    "board_dimensions": {
+        "width_mm": 100.0,
+        "height_mm": 100.0,
+        "pixel_width": 640,
+        "pixel_height": 640
+    },
+    "total_critical_components": 0,
+    "description": "Generic PCB profile for defect-only inspection (TDD-PCB). No expected component layout.",
+    "components": []
+}
+
 FALLBACK_TEMPLATE = ARDUINO_UNO_DEFAULT
 
 def load_json_template(file_path: Any) -> Dict[str, Any]:
@@ -108,6 +121,8 @@ def load_json_template(file_path: Any) -> Dict[str, Any]:
         default_layout = ESP32_DEVKIT_DEFAULT
     elif "stm32_blue_pill" in stem:
         default_layout = STM32_BLUE_PILL_DEFAULT
+    elif "generic_pcb" in stem:
+        default_layout = GENERIC_PCB_DEFAULT
     else:
         default_layout = FALLBACK_TEMPLATE
 

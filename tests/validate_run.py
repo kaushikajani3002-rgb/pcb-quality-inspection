@@ -84,6 +84,7 @@ try:
         "arduino_uno": "DeepPCB",
         "esp32_devkit": "DsPCBSD+",
         "stm32_blue_pill": "HRIPCB",
+        "generic_pcb": "TDD-PCB",
     }
     all_passed = True
     for template_key, expected_model in expected_mapping.items():

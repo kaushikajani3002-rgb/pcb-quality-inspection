@@ -13,3 +13,4 @@ models:
     esp32_devkit: DsPCBSD+
     stm32_blue_pill: HRIPCB
     generic: TDD-PCB
+    generic_pcb: TDD-PCB

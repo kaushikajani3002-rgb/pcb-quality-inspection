@@ -14,7 +14,7 @@ class TemplateManager:
         self.templates_dir.mkdir(parents=True, exist_ok=True)
         
         # Pre-initialize and write all three profiles to disk on startup if they don't exist
-        for stem in ["arduino_uno", "esp32_devkit", "stm32_blue_pill"]:
+        for stem in ["arduino_uno", "esp32_devkit", "stm32_blue_pill", "generic_pcb"]:
             self.load_template(stem)
 
     def list_templates(self) -> List[str]:
@@ -26,13 +26,13 @@ class TemplateManager:
             stems = [f.stem for f in files]
             
             # Ensure our three primary options are always in the list
-            for primary in ["arduino_uno", "esp32_devkit", "stm32_blue_pill"]:
+            for primary in ["arduino_uno", "esp32_devkit", "stm32_blue_pill", "generic_pcb"]:
                 if primary not in stems:
                     stems.append(primary)
             return sorted(list(set(stems)))
         except Exception as e:
             logger.error(f"Error listing templates in {self.templates_dir}: {e}")
-            return ["arduino_uno", "esp32_devkit", "stm32_blue_pill"]
+            return ["arduino_uno", "esp32_devkit", "generic_pcb", "stm32_blue_pill"]
 
     def load_template(self, template_name: str) -> Dict[str, Any]:
         """
