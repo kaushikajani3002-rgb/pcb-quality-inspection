@@ -1,0 +1,60 @@
+{
+    "status": "FAIL",
+    "inspection_date": "2026-07-21 18:09:51",
+    "operator": "Operator_AOI_04",
+    "template_name": "Arduino Uno",
+    "processing_time": "0.000 sec",
+    "component_statistics": {
+        "total_expected": 14,
+        "total_detected": 14,
+        "by_type": {
+            "IC": 4,
+            "Connector": 8,
+            "LED": 2
+        }
+    },
+    "missing": [
+        {
+            "id": "main_mcu_atmega328p",
+            "type": "IC",
+            "expected_x_pct": 0.55,
+            "expected_y_pct": 0.45,
+            "width_pct": 0.1,
+            "height_pct": 0.35,
+            "reason": "Absent from coordinate grid"
+        }
+    ],
+    "misaligned": [
+        {
+            "id": "usb_interface_mcu",
+            "type": "IC",
+            "expected_x_pct": 0.22,
+            "expected_y_pct": 0.25,
+            "actual_x_pct": 0.2535276967930029,
+            "actual_y_pct": 0.29307116104868913,
+            "distance_mm": 3.25,
+            "tolerance_mm": 1.5
+        }
+    ],
+    "cracks": [
+        {
+            "id": "CRK_pin13_led",
+            "parent_component": "pin13_led",
+            "center_x_pct": 0.83,
+            "center_y_pct": 0.23333333333333334,
+            "severity": "High (Solder Joint Fracture)"
+        }
+    ],
+    "extra": [
+        {
+            "id": "ERR_EXTRA_01",
+            "type": "Capacitor",
+            "center_x_pct": 0.15,
+            "center_y_pct": 0.15,
+            "width_pct": 0.05,
+            "height_pct": 0.05,
+            "confidence": 0.67,
+            "reason": "Unregistered component at coordinate"
+        }
+    ]
+}

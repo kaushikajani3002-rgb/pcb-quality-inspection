@@ -1,0 +1,5 @@
+Anomaly Type,Component ID,Type,Expected Coords (Pct),Actual Coords (Pct),Details
+Missing,main_mcu_atmega328p,IC,"(0.55, 0.45)",N/A,Absent from coordinate grid
+Misaligned,usb_interface_mcu,IC,"(0.22, 0.25)","(0.25, 0.29)",Distance: 3.25mm (Tol: 1.5mm)
+Solder Crack,CRK_pin13_led,N/A,N/A,"(0.83, 0.23)",Severity: High (Solder Joint Fracture)
+Extra Component,ERR_EXTRA_01,Capacitor,N/A,"(0.15, 0.15)",Confidence: 0.67
