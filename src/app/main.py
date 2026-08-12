@@ -209,27 +209,21 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("Simulation Options")
     
-    defect_model_options = ["None", "DeepPCB", "DsPCBSD+", "HRIPCB", "TDD-PCB"]
-    try:
-        defect_idx = defect_model_options.index(st.session_state.selected_defect_model)
-    except ValueError:
-        defect_idx = 0
-
-    selected_defect_model_lbl = st.selectbox(
-        "Select Defect Model",
-        options=defect_model_options,
-        index=defect_idx,
-        key="defect_model_select_key",
-        help="Select defect model (untrained) to run solder/trace checks."
-    )
-    st.session_state.selected_defect_model = selected_defect_model_lbl
+    # Auto-resolved defect model from PCB template (via on_template_change callback)
+    selected_defect_model_lbl = st.session_state.selected_defect_model
     
-    if selected_defect_model_lbl != "None":
+    # Display as non-interactive informational label
+    st.markdown(f"**Defect Model:** `{selected_defect_model_lbl}`")
+    
+    # Check if the auto-selected model weights exist on disk
+    if selected_defect_model_lbl and selected_defect_model_lbl != "None":
         model_path_rel = config.get(f"models.trained.{selected_defect_model_lbl}")
         if model_path_rel:
             resolved_path = config.project_root / model_path_rel
             if not resolved_path.exists():
-                st.sidebar.warning(f"⚠️ Model '{selected_defect_model_lbl}' weights not found. Using simulation fallback.")
+                st.warning(f"⚠️ Model '{selected_defect_model_lbl}' weights not found. Using simulation fallback.")
+        else:
+            st.warning(f"⚠️ No defect model configured for this PCB profile. Using simulation fallback.")
 
     defect_mode = st.checkbox(
         "Force Anomaly/Defect Mode", 
