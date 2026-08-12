@@ -36,6 +36,9 @@ A production-grade software infrastructure and operator console for **Automated 
 
 ## 📂 Repository Directory Layout
 
+> [!NOTE]
+> For an in-depth class-by-class and file-by-file description of every folder and script in this codebase, refer to the [Directory & File Catalog](docs/FILE_CATALOG.md).
+
 ```text
 pcb-quality-inspection/
 ├── src/
