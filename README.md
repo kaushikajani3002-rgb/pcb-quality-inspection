@@ -37,7 +37,8 @@ A production-grade software infrastructure and operator console for **Automated 
 ## 📂 Repository Directory Layout
 
 > [!NOTE]
-> For an in-depth class-by-class and file-by-file description of every folder and script in this codebase, refer to the [Directory & File Catalog](docs/FILE_CATALOG.md).
+> - For the current status of all features, technical walkthroughs, and test results, refer to the [Project Progress Report](PROGRESS_REPORT.md).
+> - For an in-depth class-by-class and file-by-file description of every folder and script in this codebase, refer to the [Directory & File Catalog](docs/FILE_CATALOG.md).
 
 ```text
 pcb-quality-inspection/
