@@ -1,0 +1,5 @@
+training:
+  batch: 16
+  device: ''
+  epochs: 100
+  imgsz: 640

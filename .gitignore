@@ -11,10 +11,11 @@ env/
 # Streamlit configurations
 .streamlit/
 
-# AOI Output & Log Directories
+# Temporary and served run files
 logs/
-reports/
+cache/
 outputs/
+runs/
 *.log
 
 # VS Code / OS files
@@ -26,13 +27,20 @@ Thumbs.db
 *.zip
 
 # Local Datasets and Training Runs
-datasets/
 Dataset/
-infarance/
-runs/
+datasets/raw/*
+!datasets/raw/.gitkeep
+datasets/processed/*
+!datasets/processed/.gitkeep
+datasets/external/*
+!datasets/external/.gitkeep
+datasets/samples/*
+!datasets/samples/.gitkeep
 
-# Model weights are ignored (large binaries), but registry.yaml is tracked
-models/*.pt
-models/*.onnx
-models/*.engine
+# Ignore weights binaries, but track model registry configs
+models/**/*.pt
+models/**/*.onnx
+models/**/*.engine
 !models/registry.yaml
+!models/**/.gitkeep
+

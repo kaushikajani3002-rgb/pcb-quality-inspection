@@ -37,46 +37,59 @@ A production-grade software infrastructure and operator console for **Automated 
 ## 📂 Repository Directory Layout
 
 ```text
-PCB_AOI/
-├── app/
-│   ├── __init__.py
-│   └── main.py                     # Streamlit Operator UI & State Machine
-├── config/
-│   └── config.yaml                 # Inspection tolerances, paths, & default configurations
-├── docs/
-│   └── architecture.md             # In-depth architectural designs
-├── inspection/
-│   ├── __init__.py
-│   ├── inspection_engine.py        # Master checker orchestrator
-│   ├── component_counter.py        # Counts detections against expected totals
-│   ├── missing_checker.py          # Finds absent expected components
-│   ├── extra_checker.py            # Highlights unregistered objects
-│   ├── position_checker.py         # Performs millimeter-based displacement calculations
-│   └── crack_checker.py            # Detects solder joint fractures
-├── mock/
-│   ├── __init__.py
-│   └── mock_results.py             # Generates mock inspection data
-├── templates/
-│   ├── arduino_uno.json            # Layout dimensions/coordinates: Arduino Uno
-│   ├── esp32_devkit.json           # Layout dimensions/coordinates: ESP32 DevKit
-│   └── stm32_blue_pill.json        # Layout dimensions/coordinates: STM32 Blue Pill
-├── utils/
-│   ├── __init__.py
-│   ├── config_loader.py            # Loads configuration options
-│   ├── constants.py                # Status and styling hex colors
-│   ├── file_manager.py             # Directory builder
-│   ├── helper.py                   # Formatters and converters
-│   ├── json_loader.py              # Safe JSON template reader/writer
-│   ├── logger.py                   # File logger configuration
-│   ├── report_exporter.py          # Abstract report exporter classes (Factory Pattern)
-│   ├── template_manager.py         # Manages template updates and checks
-│   └── validators.py               # Size & magic-byte header validators
-├── DATASET.md                      # Instructions on dataset structures & custom data
-├── PROJECT_INFO.md                 # Detailed onboarding & project walkthrough
-├── detection_engine.py             # YOLO Inference wrapper & coordination module
-├── train_component_yolo.py         # YOLO11m component detection training script
-├── finetune_defect_yolo.py         # YOLO11m trace defect fine-tuning script
-├── inference_defect_yolo.py        # Batch inference defect analyzer
+pcb-quality-inspection/
+├── src/
+│   ├── app/
+│   │   └── main.py                 # Streamlit Operator UI & State Machine
+│   ├── ai/
+│   │   └── detection_engine.py     # YOLO Inference wrapper & coordination module
+│   ├── inspection/
+│   │   ├── inspection_engine.py    # Master checker orchestrator
+│   │   ├── component_counter.py    # Counts detections against expected totals
+│   │   ├── missing_checker.py      # Finds absent expected components
+│   │   ├── extra_checker.py        # Highlights unregistered objects
+│   │   ├── position_checker.py     # Millimeter-based displacement calculations
+│   │   └── crack_checker.py        # Detects solder joint fractures
+│   ├── mock/
+│   │   └── mock_results.py         # Generates mock inspection data
+│   └── utils/
+│       ├── config_loader.py        # Dynamic split configuration loader
+│       ├── constants.py            # Status and styling hex colors
+│       ├── file_manager.py         # System directory initializer
+│       ├── helper.py               # Formatters and Pillow image converters
+│       ├── json_loader.py          # Safe JSON template reader/writer
+│       ├── logger.py               # File logger configuration
+│       ├── report_exporter.py      # Abstract report exporter classes (Factory Pattern)
+│       ├── template_manager.py     # Manages template updates and checks
+│       └── validators.py           # Size & magic-byte header validators
+├── configs/
+│   ├── app.yaml                    # UI and report path configurations
+│   ├── inference.yaml              # Confidence and alignment tolerances
+│   ├── model.yaml                  # Trained and pre-trained model paths
+│   └── training.yaml               # Training hyperparameters
+├── training/
+│   ├── component_detection/        # YOLO component detection training pipeline
+│   │   └── train_component_yolo.py
+│   └── defect_detection/           # YOLO defect fine-tuning pipeline
+│       └── finetune_defect_yolo.py
+├── inference/
+│   └── inference_defect_yolo.py    # Standalone batch inference evaluator
+├── datasets/                       # Datasets policy & documentation
+│   ├── external/
+│   │   └── ALL_cercit/             # Moved dataset files
+│   └── README.md
+├── models/
+│   ├── pretrained/                 # COCO pre-trained base model weights
+│   ├── trained/                    # Production-grade fine-tuned models
+│   ├── checkpoints/                # Epoch weights checkpoints
+│   ├── exported/                   # ONNX/TensorRT deployments
+│   └── registry.yaml               # Tracks registry details of models
+├── templates/                      # PCB template profiles (arduino, esp32...)
+├── docs/                           # Documentation and guides
+│   ├── DATASET.md                  # Custom dataset structuring guide
+│   └── PROJECT_INFO.md             # Onboarding project walkthrough
+├── tests/
+│   └── validate_run.py             # Pipeline integration test
 └── requirements.txt                # Project dependencies
 ```
 
@@ -86,8 +99,8 @@ PCB_AOI/
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/kaushikajani3002-rgb/pcb-defect-detection-yolo.git
-   cd pcb-defect-detection-yolo
+   git clone https://github.com/kaushikajani3002-rgb/pcb-quality-inspection.git
+   cd pcb-quality-inspection
    ```
 
 2. **Set up Virtual Environment**:
@@ -104,12 +117,8 @@ PCB_AOI/
    pip install -r requirements.txt
    ```
 
-4. **Add Trained Weights**:
-   Place your trained model weights inside the `models/` directory (create this directory if it doesn't exist):
-   - Component Detection: `models/component_yolo11m.pt`
-   - Defect Detection: `models/dspcbsd.pt`, `models/deeppcb.pt`, etc.
-   
-   Configure the paths inside the `MODEL_PATHS` dictionary in `detection_engine.py`.
+4. **Verify Weight Setup**:
+   Trained weights are registered inside `models/trained/component_detector_best.pt` and loaded automatically by `src/ai/detection_engine.py` when running inference. Pretrained YOLO weights live in `models/pretrained/`.
 
 ---
 
@@ -117,7 +126,7 @@ PCB_AOI/
 
 Launch the Streamlit operator dashboard locally:
 ```bash
-streamlit run app/main.py
+streamlit run src/app/main.py
 ```
 Open your browser at: **`http://localhost:8501`**
 
@@ -125,29 +134,29 @@ Open your browser at: **`http://localhost:8501`**
 
 ## 🏋️ Training & Fine-Tuning Models
 
-See [DATASET.md](DATASET.md) for how to structure your custom PCB images.
+See [docs/DATASET.md](docs/DATASET.md) for how to structure your custom PCB images.
 
 ### Train Component Detector
 To train the YOLO11m component detection model to recognize parts:
 ```bash
-python train_component_yolo.py --data datasets/components/data.yaml --epochs 70 --batch 8
+python training/component_detection/train_component_yolo.py --data datasets/components/data.yaml --epochs 70 --batch 8
 ```
 
 ### Fine-Tune Defect Detector
-To fine-tune pre-trained component weights on defect datasets (e.g. solder joint issues or trace damage):
+To fine-tune pre-trained component weights on defect datasets:
 ```bash
-python finetune_defect_yolo.py
+python training/defect_detection/finetune_defect_yolo.py
 ```
 
-### Run Batch Defect Inference
-To execute batch inference on a folder of test PCB frames:
+### Run Standalone Batch Inference
+To evaluate predictions over test images:
 ```bash
-python inference_defect_yolo.py
+python inference/inference_defect_yolo.py
 ```
 
 ---
 
-## 🔧 Inspection Configuration (`config/config.yaml`)
+## 🔧 Inspection Configuration (`configs/inference.yaml`)
 
 You can customize parameters directly without changing the codebase:
 ```yaml
@@ -179,4 +188,3 @@ Distributed under the MIT License. See `LICENSE` for more information.
 - **Isha Kakadiya**
 - **Tushar Kacha**
 - **GitHub**: [kaushikajani3002-rgb](https://github.com/kaushikajani3002-rgb)
-- 

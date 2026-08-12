@@ -1,0 +1,10 @@
+models:
+  pretrained:
+    yolo11m: models/pretrained/yolo11m.pt
+    yolo26n: models/pretrained/yolo26n.pt
+  trained:
+    Component: models/trained/component_detector_best.pt
+    DeepPCB: models/trained/DeepPCB/best.pt
+    DsPCBSD+: models/trained/DsPCBSD+/best.pt
+    HRIPCB: models/trained/HRIPCB/best.pt
+    TDD-PCB: models/trained/TDD-PCB/best.pt

@@ -1,0 +1,12 @@
+dashboard:
+  company_name: Anti-Gravity PCB Assembly Line
+  default_operator: Operator_AOI_04
+  logo_path: assets/logo_placeholder.png
+  theme: dark
+paths:
+  exported_reports_folder: outputs/exported_reports
+  log_folder: logs
+  output_folder: outputs/predictions
+  report_folder: outputs/reports
+  template_folder: templates
+  visualizations_folder: outputs/visualizations
