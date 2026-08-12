@@ -40,6 +40,7 @@ from src.ai.detection_engine import (
     load_model, run_component_counting, run_defect_detection,
     build_inventory_table, compute_dashboard_metrics
 )
+from src.ai.model_manager import ModelManager
 
 # -----------------------------------------------------------------------------
 # PAGE SETUP & STYLING
@@ -108,6 +109,8 @@ if "selected_template" not in st.session_state:
     st.session_state.selected_template = "Arduino Uno"
 if "selected_defect_model" not in st.session_state:
     st.session_state.selected_defect_model = "DeepPCB"
+if "model_manager" not in st.session_state:
+    st.session_state.model_manager = ModelManager()
 
 # Load configurations
 try:
@@ -127,7 +130,11 @@ def on_template_change():
         "Generic PCB": "generic_pcb"
     }
     stem = device_options.get(new_template_lbl, "generic")
-    default_model = config.get(f"models.defect_mapping.{stem}", "TDD-PCB")
+    mapping = config.get(f"models.defect_mapping.{stem}", {})
+    if isinstance(mapping, dict):
+        default_model = mapping.get("name", "TDD-PCB")
+    else:
+        default_model = mapping if mapping else "TDD-PCB"
     st.session_state.selected_defect_model = default_model
 
 # Resolve directories
@@ -311,13 +318,22 @@ if run_clicked:
                 my_bar.empty()
 
                 try:
-                    # Load real YOLO component model
-                    component_model = load_model("Component")
-                    
-                    # Load auto-selected defect model
+                    mgr = st.session_state.model_manager
+
+                    # Load cached component model (same for all profiles)
+                    component_model = mgr.get_component_model()
+
+                    # Load cached defect model (profile-specific)
                     defect_model = None
-                    if selected_defect_model_lbl != "None":
-                        defect_model = load_model(selected_defect_model_lbl)
+                    if selected_defect_model_lbl and selected_defect_model_lbl != "None":
+                        defect_model, _ = mgr.get_defect_model(selected_template_stem)
+
+                    # Log selected models for traceability
+                    comp_info = mgr.get_component_model_info()
+                    def_info = mgr.get_defect_model_info(selected_template_stem)
+                    logger.info(f"PCB Profile: {selected_device_lbl}")
+                    logger.info(f"Defect Model: {def_info['name']} | Path: {def_info['path']}")
+                    logger.info(f"Component Model: {comp_info['name']} | Path: {comp_info['path']}")
                     
                     # Run actual component detection and checker aggregation
                     results = run_component_counting(
