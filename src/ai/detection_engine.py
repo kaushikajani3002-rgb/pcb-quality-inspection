@@ -8,13 +8,13 @@ from ultralytics import YOLO
 from src.utils.logger import logger
 from src.inspection.inspection_engine import InspectionEngine
 
-# Dictionary of model paths. The user will share/fill the paths.
+# Dictionary of model paths. Mapped to configs/model.yaml defaults.
 MODEL_PATHS = {
     "Component": "models/trained/component_detector_best.pt",
-    "DeepPCB": "models/trained/DeepPCB/best.pt",
-    "DsPCBSD+": "models/trained/DsPCBSD+/best.pt",
-    "HRIPCB": "models/trained/HRIPCB/best.pt",
-    "TDD-PCB": "models/trained/TDD-PCB/best.pt"
+    "DeepPCB": "models/trained/deeppcb_best.pt",
+    "DsPCBSD+": "models/trained/dspcbsd_best.pt",
+    "HRIPCB": "models/trained/hripcb_best.pt",
+    "TDD-PCB": "models/trained/tddpcb_best.pt"
 }
 
 # Trained class names to template component type strings mapping
@@ -24,15 +24,34 @@ CLASS_NAME_MAP = {}
 def load_model(model_name: str) -> Any:
     """
     Loads a YOLO model from weights.
-    Returns None if the path is not configured or weight file does not exist.
+    Resolves paths dynamically from configs/model.yaml, falling back to static defaults.
     """
-    path = MODEL_PATHS.get(model_name, "")
+    from src.utils.config_loader import ConfigLoader
+    from pathlib import Path
+
+    path = ""
+    try:
+        config = ConfigLoader()
+        path_rel = config.get(f"models.trained.{model_name}")
+        if path_rel:
+            path = str(config.project_root / path_rel)
+    except Exception:
+        pass
+
+    if not path:
+        path_rel = MODEL_PATHS.get(model_name, "")
+        if path_rel:
+            project_root = Path(__file__).resolve().parent.parent.parent
+            path = str(project_root / path_rel)
+
     if not path:
         logger.warning(f"Model path for '{model_name}' is not configured.")
         return None
+
     if not os.path.exists(path):
         logger.error(f"Model file not found for '{model_name}' at: {path}")
         return None
+
     try:
         model = YOLO(path)
         logger.info(f"Successfully loaded '{model_name}' YOLO model from {path}")
@@ -155,7 +174,8 @@ def run_component_counting(
     iou_slider: float, 
     active_template: Dict[str, Any], 
     position_tolerance_slider: float,
-    defect_mode: bool = False
+    defect_mode: bool = False,
+    defect_model: Any = None
 ) -> Dict[str, Any]:
     """
     Executes YOLO11m component detection on an uploaded image, maps the predictions 
@@ -235,9 +255,34 @@ def run_component_counting(
             t = d["type"]
             detected_counts[t] = detected_counts.get(t, 0) + 1
             
-    # Inject mock cracks if defect mode is toggled (since defect models are untrained)
+    # 6. Solder & Trace Defect Detection (Real model inference or Simulation fallback)
     cracks = []
-    if defect_mode:
+    if defect_model is not None:
+        try:
+            logger.info("Executing real defect model inference...")
+            defect_results = defect_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
+            boxes = defect_results[0].boxes
+            for box in boxes:
+                cls_id = int(box.cls[0])
+                conf = float(box.conf[0])
+                class_name = defect_model.names.get(cls_id, f"Class {cls_id}")
+                xywhn = box.xywhn[0].tolist()
+                cx_pct, cy_pct, w_pct, h_pct = xywhn
+                
+                cracks.append({
+                    "id": f"DEF_{class_name.upper()}_{len(cracks)+1:02d}",
+                    "parent_component": "Board/Trace",
+                    "center_x_pct": cx_pct,
+                    "center_y_pct": cy_pct,
+                    "width_pct": w_pct,
+                    "height_pct": h_pct,
+                    "severity": f"High ({class_name} @ {conf:.2f})"
+                })
+        except Exception as e:
+            logger.error(f"YOLO Defect Inference failed: {e}")
+            
+    # Fallback to simulation cracks if no real model is present and defect mode is toggled
+    if defect_model is None and defect_mode:
         correct_comps = [d for d in matched_detections if d.get("status") == "Correct"]
         if correct_comps:
             crack_target = correct_comps[-1]  # Pick last correct component to corrupt
@@ -333,15 +378,28 @@ def run_component_counting(
             
         draw_seg.rectangle([left, top, right, bottom], fill=fill_color)
         
-    # Draw crack shapes
+    # Draw crack and trace defect shapes
     for crk in cracks:
-        ccx = int(crk["center_x_pct"] * w)
-        ccy = int(crk["center_y_pct"] * h)
-        draw_seg.polygon(
-            [(ccx - 10, ccy - 5), (ccx + 5, ccy - 8), (ccx - 2, ccy + 10), (ccx + 12, ccy + 3), (ccx - 8, ccy + 5)],
-            fill=(51, 153, 255, 255), outline=(255, 255, 255, 255)
-        )
-        draw_seg.text((ccx - 20, ccy - 20), "CRACK DETECTED", fill="#3399FF")
+        if "width_pct" in crk:
+            dcx = int(crk["center_x_pct"] * w)
+            dcy = int(crk["center_y_pct"] * h)
+            dcw = int(crk["width_pct"] * w)
+            dch = int(crk["height_pct"] * h)
+            dleft, dtop = dcx - dcw // 2, dcy - dch // 2
+            dright, dbottom = dcx + dcw // 2, dcy + dch // 2
+            # Draw red defect bounding box
+            draw_seg.rectangle([dleft, dtop, dright, dbottom], outline=(255, 51, 51, 255), width=3)
+            # Write label
+            lbl = crk["severity"].split(" ")[-3].replace("(", "")
+            draw_seg.text((dleft + 5, dtop + 5), lbl, fill="#FF3333")
+        else:
+            ccx = int(crk["center_x_pct"] * w)
+            ccy = int(crk["center_y_pct"] * h)
+            draw_seg.polygon(
+                [(ccx - 10, ccy - 5), (ccx + 5, ccy - 8), (ccx - 2, ccy + 10), (ccx + 12, ccy + 3), (ccx - 8, ccy + 5)],
+                fill=(51, 153, 255, 255), outline=(255, 255, 255, 255)
+            )
+            draw_seg.text((ccx - 20, ccy - 20), "CRACK DETECTED", fill="#3399FF")
         
     # Composite segmentation mask on top of original image
     segmentation_image = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")

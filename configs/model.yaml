@@ -4,7 +4,12 @@ models:
     yolo26n: models/pretrained/yolo26n.pt
   trained:
     Component: models/trained/component_detector_best.pt
-    DeepPCB: models/trained/DeepPCB/best.pt
-    DsPCBSD+: models/trained/DsPCBSD+/best.pt
-    HRIPCB: models/trained/HRIPCB/best.pt
-    TDD-PCB: models/trained/TDD-PCB/best.pt
+    DeepPCB: models/trained/deeppcb_best.pt
+    DsPCBSD+: models/trained/dspcbsd_best.pt
+    HRIPCB: models/trained/hripcb_best.pt
+    TDD-PCB: models/trained/tddpcb_best.pt
+  defect_mapping:
+    arduino_uno: DeepPCB
+    esp32_devkit: DsPCBSD+
+    stm32_blue_pill: HRIPCB
+    generic: TDD-PCB

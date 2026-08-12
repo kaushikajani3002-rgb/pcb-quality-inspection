@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 # Insert project root into sys.path
-project_root = Path(r"d:\Pcb Quality Inspection")
+project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 

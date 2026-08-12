@@ -104,6 +104,10 @@ if "segmentation_image" not in st.session_state:
     st.session_state.segmentation_image = None
 if "error_message" not in st.session_state:
     st.session_state.error_message = ""
+if "selected_template" not in st.session_state:
+    st.session_state.selected_template = "Arduino Uno"
+if "selected_defect_model" not in st.session_state:
+    st.session_state.selected_defect_model = "DeepPCB"
 
 # Load configurations
 try:
@@ -112,6 +116,18 @@ try:
 except Exception as e:
     st.error(f"Failed to load configuration: {e}")
     st.stop()
+
+def on_template_change():
+    new_template_lbl = st.session_state.temp_select_key
+    st.session_state.selected_template = new_template_lbl
+    device_options = {
+        "Arduino Uno": "arduino_uno",
+        "ESP32 DevKit": "esp32_devkit",
+        "STM32 Blue Pill": "stm32_blue_pill"
+    }
+    stem = device_options.get(new_template_lbl, "generic")
+    default_model = config.get(f"models.defect_mapping.{stem}", "TDD-PCB")
+    st.session_state.selected_defect_model = default_model
 
 # Resolve directories
 report_dir = config.get_resolved_path("report_folder")
@@ -141,13 +157,21 @@ with st.sidebar:
         "STM32 Blue Pill": "stm32_blue_pill"
     }
     
+    try:
+        template_idx = list(device_options.keys()).index(st.session_state.selected_template)
+    except ValueError:
+        template_idx = 0
+
     selected_device_lbl = st.selectbox(
         "Select PCB Template Profile",
         options=list(device_options.keys()),
-        index=0,
+        index=template_idx,
+        key="temp_select_key",
+        on_change=on_template_change,
         help="Loads physical measurements and expected component positions."
     )
     selected_template_stem = device_options[selected_device_lbl]
+    st.session_state.selected_template = selected_device_lbl
     
     # 2. Image File Uploader
     uploaded_file = st.file_uploader(
@@ -185,15 +209,27 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("Simulation Options")
     
+    defect_model_options = ["None", "DeepPCB", "DsPCBSD+", "HRIPCB", "TDD-PCB"]
+    try:
+        defect_idx = defect_model_options.index(st.session_state.selected_defect_model)
+    except ValueError:
+        defect_idx = 0
+
     selected_defect_model_lbl = st.selectbox(
         "Select Defect Model",
-        options=["None", "DeepPCB", "DsPCBSD+", "HRIPCB", "TDD-PCB"],
-        index=0,
+        options=defect_model_options,
+        index=defect_idx,
+        key="defect_model_select_key",
         help="Select defect model (untrained) to run solder/trace checks."
     )
+    st.session_state.selected_defect_model = selected_defect_model_lbl
     
     if selected_defect_model_lbl != "None":
-        st.sidebar.error(f"Selected model '{selected_defect_model_lbl}' weights do not exist yet. Using graceful fallback.")
+        model_path_rel = config.get(f"models.trained.{selected_defect_model_lbl}")
+        if model_path_rel:
+            resolved_path = config.project_root / model_path_rel
+            if not resolved_path.exists():
+                st.sidebar.warning(f"⚠️ Model '{selected_defect_model_lbl}' weights not found. Using simulation fallback.")
 
     defect_mode = st.checkbox(
         "Force Anomaly/Defect Mode", 
@@ -282,10 +318,16 @@ if run_clicked:
                     # Load real YOLO component model
                     component_model = load_model("Component")
                     
+                    # Load auto-selected defect model
+                    defect_model = None
+                    if selected_defect_model_lbl != "None":
+                        defect_model = load_model(selected_defect_model_lbl)
+                    
                     # Run actual component detection and checker aggregation
                     results = run_component_counting(
                         uploaded_image=uploaded_file,
                         component_model=component_model,
+                        defect_model=defect_model,
                         conf_slider=conf_threshold,
                         iou_slider=iou_threshold,
                         active_template=template,
