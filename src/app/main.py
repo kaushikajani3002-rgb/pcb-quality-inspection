@@ -40,7 +40,6 @@ from src.ai.detection_engine import (
     load_model, run_component_counting, run_defect_detection,
     build_inventory_table, compute_dashboard_metrics
 )
-from src.ai.model_manager import ModelManager
 
 # -----------------------------------------------------------------------------
 # PAGE SETUP & STYLING
@@ -109,8 +108,6 @@ if "selected_template" not in st.session_state:
     st.session_state.selected_template = "Arduino Uno"
 if "selected_defect_model" not in st.session_state:
     st.session_state.selected_defect_model = "DeepPCB"
-if "model_manager" not in st.session_state:
-    st.session_state.model_manager = ModelManager()
 
 # Load configurations
 try:
@@ -129,12 +126,12 @@ def on_template_change():
         "STM32 Blue Pill": "stm32_blue_pill",
         "Generic PCB": "generic_pcb"
     }
-    stem = device_options.get(new_template_lbl, "generic")
-    mapping = config.get(f"models.defect_mapping.{stem}", {})
-    if isinstance(mapping, dict):
-        default_model = mapping.get("name", "TDD-PCB")
+    stem = device_options.get(new_template_lbl, "generic_pcb")
+    mapping_entry = config.get(f"models.defect_mapping.{stem}")
+    if isinstance(mapping_entry, dict):
+        default_model = mapping_entry.get("name", "TDD-PCB")
     else:
-        default_model = mapping if mapping else "TDD-PCB"
+        default_model = mapping_entry or "TDD-PCB"
     st.session_state.selected_defect_model = default_model
 
 # Resolve directories
@@ -226,7 +223,12 @@ with st.sidebar:
     
     # Check if the auto-selected model weights exist on disk
     if selected_defect_model_lbl and selected_defect_model_lbl != "None":
-        model_path_rel = config.get(f"models.trained.{selected_defect_model_lbl}")
+        mapping_entry = config.get(f"models.defect_mapping.{selected_template_stem}")
+        if isinstance(mapping_entry, dict):
+            model_path_rel = mapping_entry.get("path")
+        else:
+            model_path_rel = config.get(f"models.trained.{selected_defect_model_lbl}")
+            
         if model_path_rel:
             resolved_path = config.project_root / model_path_rel
             if not resolved_path.exists():
@@ -317,23 +319,46 @@ if run_clicked:
                     my_bar.progress(pct + 1, text=progress_text)
                 my_bar.empty()
 
+                # Log model config details
+                comp_config = config.get("models.component_model")
+                defect_mapping = config.get("models.defect_mapping")
+                profile_config = defect_mapping.get(selected_template_stem, {}) if defect_mapping else {}
+                
+                if isinstance(comp_config, dict):
+                    comp_name = comp_config.get("name", "Component")
+                    comp_path = comp_config.get("path", "models/trained/component_detector_best.pt")
+                else:
+                    comp_name = "Component"
+                    comp_path = "models/trained/component_detector_best.pt"
+                    
+                if isinstance(profile_config, dict):
+                    def_name = profile_config.get("name", "None")
+                    def_path = profile_config.get("path", "None")
+                else:
+                    def_name = profile_config or "None"
+                    def_path = config.get(f"models.trained.{def_name}", "None")
+                
+                logger.info(f"PCB Profile: {selected_device_lbl}")
+                logger.info(f"Defect Model: {def_name}")
+                logger.info(f"Defect Model Path: {def_path}")
+                logger.info(f"Component Model: {comp_name}")
+                logger.info(f"Component Model Path: {comp_path}")
+
                 try:
-                    mgr = st.session_state.model_manager
-
-                    # Load cached component model (same for all profiles)
-                    component_model = mgr.get_component_model()
-
-                    # Load cached defect model (profile-specific)
-                    defect_model = None
-                    if selected_defect_model_lbl and selected_defect_model_lbl != "None":
-                        defect_model, _ = mgr.get_defect_model(selected_template_stem)
-
-                    # Log selected models for traceability
-                    comp_info = mgr.get_component_model_info()
-                    def_info = mgr.get_defect_model_info(selected_template_stem)
-                    logger.info(f"PCB Profile: {selected_device_lbl}")
-                    logger.info(f"Defect Model: {def_info['name']} | Path: {def_info['path']}")
-                    logger.info(f"Component Model: {comp_info['name']} | Path: {comp_info['path']}")
+                    from src.ai.model_manager import ModelManager
+                    manager = ModelManager()
+                    
+                    try:
+                        component_model = manager.get_component_model()
+                    except FileNotFoundError as e:
+                        component_model = None
+                        logger.warning(f"Component model fallback activated: {e}")
+                        
+                    try:
+                        defect_model = manager.get_defect_model(selected_template_stem)
+                    except FileNotFoundError as e:
+                        defect_model = None
+                        logger.warning(f"Defect model fallback activated: {e}")
                     
                     # Run actual component detection and checker aggregation
                     results = run_component_counting(

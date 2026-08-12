@@ -2,21 +2,9 @@ models:
   pretrained:
     yolo11m: models/pretrained/yolo11m.pt
     yolo26n: models/pretrained/yolo26n.pt
-
-  # Common component detection model (same for all PCB profiles)
   component_model:
     name: Component
     path: models/trained/component_detector_best.pt
-
-  # Flat name→path lookup (backward compat for load_model())
-  trained:
-    Component: models/trained/component_detector_best.pt
-    DeepPCB: models/trained/deeppcb_best.pt
-    DsPCBSD+: models/trained/dspcbsd_best.pt
-    HRIPCB: models/trained/hripcb_best.pt
-    TDD-PCB: models/trained/tddpcb_best.pt
-
-  # PCB profile → defect model mapping (name + path per profile)
   defect_mapping:
     arduino_uno:
       name: DeepPCB
@@ -27,9 +15,6 @@ models:
     stm32_blue_pill:
       name: HRIPCB
       path: models/trained/hripcb_best.pt
-    generic:
-      name: TDD-PCB
-      path: models/trained/tddpcb_best.pt
     generic_pcb:
       name: TDD-PCB
       path: models/trained/tddpcb_best.pt
