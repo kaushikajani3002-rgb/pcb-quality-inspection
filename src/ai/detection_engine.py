@@ -260,8 +260,10 @@ def run_component_counting(
     raw_detections = []
     if component_model is not None:
         try:
+            logger.info(f"[INFERENCE]\nConfidence Threshold: {conf_slider}\nIoU Threshold: {iou_slider}\nModel: Component Detector")
             results = component_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
             boxes = results[0].boxes
+            logger.info(f"[INFERENCE RESULT] Final component detections after confidence & NMS: {len(boxes)}")
             for box in boxes:
                 cls_id = int(box.cls[0])
                 conf = float(box.conf[0])
@@ -311,9 +313,10 @@ def run_component_counting(
     cracks = []
     if defect_model is not None:
         try:
-            logger.info("Executing real defect model inference...")
+            logger.info(f"[INFERENCE]\nConfidence Threshold: {conf_slider}\nIoU Threshold: {iou_slider}\nModel: Defect Detector")
             defect_results = defect_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
             boxes = defect_results[0].boxes
+            logger.info(f"[INFERENCE RESULT] Final defect detections after confidence & NMS: {len(boxes)}")
             for box in boxes:
                 cls_id = int(box.cls[0])
                 conf = float(box.conf[0])
