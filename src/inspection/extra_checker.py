@@ -30,10 +30,10 @@ class ExtraChecker:
                     "center_y_pct": d.get("center_y_pct", 0.0),
                     "width_pct": d.get("width_pct", 0.0),
                     "height_pct": d.get("height_pct", 0.0),
-                    "center_x": d.get("center_x_pct", 0.0),
-                    "center_y": d.get("center_y_pct", 0.0),
-                    "width": d.get("width_pct", 0.0),
-                    "height": d.get("height_pct", 0.0),
+                    "center_x": d.get("center_x", 0.0),
+                    "center_y": d.get("center_y", 0.0),
+                    "width": d.get("width", 0.0),
+                    "height": d.get("height", 0.0),
                     "confidence": d.get("confidence", 0.0),
                     "reason": "Unregistered component ID or unexpected placement location"
                 })

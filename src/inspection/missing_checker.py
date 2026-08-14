@@ -31,10 +31,10 @@ class MissingChecker:
                     "expected_y_pct": e.get("center_y_pct", 0.0),
                     "width_pct": e.get("width_pct", 0.0),
                     "height_pct": e.get("height_pct", 0.0),
-                    "expected_x": e.get("center_x_pct", 0.0),
-                    "expected_y": e.get("center_y_pct", 0.0),
-                    "width": e.get("width_pct", 0.0),
-                    "height": e.get("height_pct", 0.0),
+                    "expected_x": e.get("center_x", 0.0),
+                    "expected_y": e.get("center_y", 0.0),
+                    "width": e.get("width", 0.0),
+                    "height": e.get("height", 0.0),
                     "reason": "Missing component at expected coordinates"
                 })
                 

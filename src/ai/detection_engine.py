@@ -93,6 +93,81 @@ def load_model(model_name: str) -> Any:
         logger.error(f"Error initializing YOLO model '{model_name}' from {path}: {e}")
         return None
 
+def normalize_component_coordinates(comp: Dict[str, Any], W: float, H: float) -> Dict[str, Any]:
+    """
+    Ensures that every component dictionary conforms to a single consistent coordinate schema.
+    Calculates percentage values in 0-100 range and maps pixels consistently.
+    """
+    c = comp.copy()
+    c.setdefault("id", "Unknown")
+    c.setdefault("type", "Unknown")
+    c.setdefault("class_id", -1)
+    c.setdefault("class_name", c["type"])
+    c.setdefault("confidence", 1.0)
+    
+    if "x1" in c and "y1" in c and "x2" in c and "y2" in c:
+        x1, y1, x2, y2 = float(c["x1"]), float(c["y1"]), float(c["x2"]), float(c["y2"])
+        cx = (x1 + x2) / 2.0
+        cy = (y1 + y2) / 2.0
+        width = x2 - x1
+        height = y2 - y1
+    elif "center_x" in c and "center_y" in c and "width" in c and "height" in c and not any(k in ["center_x_pct", "center_y_pct"] for k in c):
+        cx = float(c["center_x"])
+        cy = float(c["center_y"])
+        width = float(c["width"])
+        height = float(c["height"])
+        x1 = cx - width / 2.0
+        y1 = cy - height / 2.0
+        x2 = cx + width / 2.0
+        y2 = cy + height / 2.0
+    else:
+        cx_pct = float(c.get("center_x_pct", 0.5))
+        cy_pct = float(c.get("center_y_pct", 0.5))
+        w_pct = float(c.get("width_pct", 0.1))
+        h_pct = float(c.get("height_pct", 0.1))
+        
+        # If input has ratio coordinates (0.0 to 1.0), convert to ratio.
+        is_ratio = False
+        for val in [cx_pct, cy_pct, w_pct, h_pct]:
+            if 0 < val <= 1.0:
+                is_ratio = True
+                break
+                
+        if is_ratio:
+            cx_ratio = cx_pct
+            cy_ratio = cy_pct
+            w_ratio = w_pct
+            h_ratio = h_pct
+        else:
+            cx_ratio = cx_pct / 100.0
+            cy_ratio = cy_pct / 100.0
+            w_ratio = w_pct / 100.0
+            h_ratio = h_pct / 100.0
+            
+        cx = cx_ratio * W
+        cy = cy_ratio * H
+        width = w_ratio * W
+        height = h_ratio * H
+        x1 = cx - width / 2.0
+        y1 = cy - height / 2.0
+        x2 = cx + width / 2.0
+        y2 = cy + height / 2.0
+
+    c["x1"] = round(x1, 2)
+    c["y1"] = round(y1, 2)
+    c["x2"] = round(x2, 2)
+    c["y2"] = round(y2, 2)
+    c["center_x"] = round(cx, 2)
+    c["center_y"] = round(cy, 2)
+    c["width"] = round(width, 2)
+    c["height"] = round(height, 2)
+    c["center_x_pct"] = round((cx / W) * 100.0, 2) if W > 0 else 0.0
+    c["center_y_pct"] = round((cy / H) * 100.0, 2) if H > 0 else 0.0
+    c["width_pct"] = round((width / W) * 100.0, 2) if W > 0 else 0.0
+    c["height_pct"] = round((height / H) * 100.0, 2) if H > 0 else 0.0
+    
+    return c
+
 def pixel_to_mm(pixel_val: float, pixel_dim: float, mm_dim: float) -> float:
     """
     Converts visual pixel coordinates to physical millimeters.
@@ -109,8 +184,8 @@ def check_misalignment(
     """
     Computes Euclidean misalignment distance in millimeters.
     """
-    dist_x_mm = (exp_x_pct - act_x_pct) * width_mm
-    dist_y_mm = (exp_y_pct - act_y_pct) * height_mm
+    dist_x_mm = ((exp_x_pct - act_x_pct) / 100.0) * width_mm
+    dist_y_mm = ((exp_y_pct - act_y_pct) / 100.0) * height_mm
     return math.sqrt(dist_x_mm ** 2 + dist_y_mm ** 2)
 
 def match_detections_to_template(
@@ -180,11 +255,11 @@ def match_detections_to_template(
         dist_matrix = []
         for exp in exps:
             row = []
-            exp_x_mm = exp["center_x_pct"] * width_mm
-            exp_y_mm = exp["center_y_pct"] * height_mm
+            exp_x_mm = (exp["center_x_pct"] / 100.0) * width_mm
+            exp_y_mm = (exp["center_y_pct"] / 100.0) * height_mm
             for det in dets:
-                det_x_mm = det["center_x_pct"] * width_mm
-                det_y_mm = det["center_y_pct"] * height_mm
+                det_x_mm = (det["center_x_pct"] / 100.0) * width_mm
+                det_y_mm = (det["center_y_pct"] / 100.0) * height_mm
                 dist = math.sqrt((exp_x_mm - det_x_mm) ** 2 + (exp_y_mm - det_y_mm) ** 2)
                 row.append(dist)
             dist_matrix.append(row)
@@ -300,7 +375,7 @@ def run_component_counting(
     w, h = img.size
     
     # 2. Default fallback values
-    expected_comps = active_template.get("components", [])
+    expected_comps = [normalize_component_coordinates(c, w, h) for c in active_template.get("components", [])]
     total_comps = len(expected_comps)
     
     board_dims = active_template.get("board_dimensions", {})
@@ -317,52 +392,40 @@ def run_component_counting(
     raw_details = []
     if component_model is not None:
         try:
-            logger.info(f"[INFERENCE]\nConfidence Threshold: {conf_slider}\nIoU Threshold: {iou_slider}\nModel: Component Detector")
-            results = component_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
-            boxes = results[0].boxes
-            logger.info(f"[INFERENCE RESULT] Final component detections after confidence & NMS: {len(boxes)}")
-            for box in boxes:
-                cls_id = int(box.cls[0])
-                conf = float(box.conf[0])
-                class_name = component_model.names.get(cls_id, f"Class {cls_id}")
-                
-                # Extract pixel coordinates
-                xyxy = box.xyxy[0].tolist()
-                x1, y1, x2, y2 = xyxy
-                xywh = box.xywh[0].tolist()
-                cx, cy, w_box, h_box = xywh
-                
-                logger.info(f"  [RAW DET] ClassID: {cls_id}, Name: '{class_name}', Conf: {conf:.4f}, BBox: [{x1:.1f}, {y1:.1f}, {x2:.1f}, {y2:.1f}], Center: ({cx:.1f}, {cy:.1f}), Size: {w_box:.1f}x{h_box:.1f}")
-                
-                # Apply class mapping
-                mapped_type = map_class_to_component_type(class_name)
-                
-                # Extract normalized coordinates (xywhn is center_x, center_y, width, height normalized)
-                xywhn = box.xywhn[0].tolist()
-                cx_pct, cy_pct, w_pct, h_pct = xywhn
-                
-                raw_detections.append({
-                    "type": mapped_type,
-                    "center_x_pct": cx_pct,
-                    "center_y_pct": cy_pct,
-                    "width_pct": w_pct,
-                    "height_pct": h_pct,
-                    "confidence": round(conf, 2)
-                })
-                
-                raw_details.append({
-                    "class_id": cls_id,
-                    "class_name": class_name,
-                    "confidence": conf,
-                    "x1": x1,
-                    "y1": y1,
-                    "x2": x2,
-                    "y2": y2,
-                    "center_x": cx,
-                    "center_y": cy,
-                    "width": w_box,
-                    "height": h_box
-                })
+             logger.info(f"[INFERENCE]\nConfidence Threshold: {conf_slider}\nIoU Threshold: {iou_slider}\nModel: Component Detector")
+             results = component_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
+             boxes = results[0].boxes
+             logger.info(f"[INFERENCE RESULT] Final component detections after confidence & NMS: {len(boxes)}")
+             for box in boxes:
+                 cls_id = int(box.cls[0])
+                 conf = float(box.conf[0])
+                 class_name = component_model.names.get(cls_id, f"Class {cls_id}")
+                 
+                 # Extract pixel coordinates
+                 xyxy = box.xyxy[0].tolist()
+                 x1, y1, x2, y2 = xyxy
+                 xywh = box.xywh[0].tolist()
+                 cx, cy, w_box, h_box = xywh
+                 
+                 logger.info(f"  [RAW DET] ClassID: {cls_id}, Name: '{class_name}', Conf: {conf:.4f}, BBox: [{x1:.1f}, {y1:.1f}, {x2:.1f}, {y2:.1f}], Center: ({cx:.1f}, {cy:.1f}), Size: {w_box:.1f}x{h_box:.1f}")
+                 
+                 # Apply class mapping
+                 mapped_type = map_class_to_component_type(class_name)
+                 
+                 # Centralized coordinate normalization
+                 raw_det = normalize_component_coordinates({
+                     "class_id": cls_id,
+                     "class_name": class_name,
+                     "type": mapped_type,
+                     "confidence": float(conf),
+                     "x1": x1,
+                     "y1": y1,
+                     "x2": x2,
+                     "y2": y2
+                 }, w, h)
+                 
+                 raw_detections.append(raw_det)
+                 raw_details.append(raw_det)
         except Exception as e:
             logger.error(f"YOLO Component Inference failed: {e}")
     else:
@@ -403,7 +466,7 @@ def run_component_counting(
                 xywhn = box.xywhn[0].tolist()
                 cx_pct, cy_pct, w_pct, h_pct = xywhn
                 
-                cracks.append({
+                cracks.append(normalize_component_coordinates({
                     "id": f"DEF_{class_name.upper()}_{len(cracks)+1:02d}",
                     "parent_component": "Board/Trace",
                     "center_x_pct": cx_pct,
@@ -411,7 +474,7 @@ def run_component_counting(
                     "width_pct": w_pct,
                     "height_pct": h_pct,
                     "severity": f"High ({class_name} @ {conf:.2f})"
-                })
+                }, w, h))
         except Exception as e:
             logger.error(f"YOLO Defect Inference failed: {e}")
             
@@ -421,13 +484,15 @@ def run_component_counting(
         if correct_comps:
             crack_target = correct_comps[-1]  # Pick last correct component to corrupt
             crack_id = f"CRK_{crack_target['id']}"
-            cracks.append({
+            cracks.append(normalize_component_coordinates({
                 "id": crack_id,
                 "parent_component": crack_target["id"],
                 "center_x_pct": crack_target["center_x_pct"] + (crack_target["width_pct"] / 3.0),
                 "center_y_pct": crack_target["center_y_pct"] + (crack_target["height_pct"] / 3.0),
+                "width_pct": crack_target["width_pct"] / 3.0,
+                "height_pct": crack_target["height_pct"] / 3.0,
                 "severity": "High (Solder Joint Fracture)"
-            })
+            }, w, h))
             crack_target["status"] = "Crack Detected"
             
     # 7. Render Annotated Bounding Box Image (Detection View)
@@ -436,10 +501,10 @@ def run_component_counting(
     
     # Draw detections
     for d in matched_detections:
-        cx = int(d["center_x_pct"] * w)
-        cy = int(d["center_y_pct"] * h)
-        cw = int(d["width_pct"] * w)
-        ch = int(d["height_pct"] * h)
+        cx = int(d["center_x"])
+        cy = int(d["center_y"])
+        cw = int(d["width"])
+        ch = int(d["height"])
         left, top = cx - cw // 2, cy - ch // 2
         right, bottom = cx + cw // 2, cy + ch // 2
         
@@ -460,25 +525,25 @@ def run_component_counting(
         
         # Draw misalignment vectors
         if status == "Misaligned":
-            expected_x_pct = d["center_x_pct"]
-            expected_y_pct = d["center_y_pct"]
+            exp_x_px = cx
+            exp_y_px = cy
             for m in inspection_results["misaligned"]:
                 if m["id"] == d["id"]:
-                    expected_x_pct = m["expected_x_pct"]
-                    expected_y_pct = m["expected_y_pct"]
+                    exp_comp = next((e for e in expected_comps if e["id"] == d["id"]), None)
+                    if exp_comp:
+                        exp_x_px = int(exp_comp["center_x"])
+                        exp_y_px = int(exp_comp["center_y"])
                     break
-            exp_x_px = int(expected_x_pct * w)
-            exp_y_px = int(expected_y_pct * h)
             
             draw.ellipse([exp_x_px - 4, exp_y_px - 4, exp_x_px + 4, exp_y_px + 4], fill="#00FF66")
             draw.line([(exp_x_px, exp_y_px), (cx, cy)], fill="#FFCC00", width=2)
             
     # Draw Missing Component Crosshairs
     for m in inspection_results["missing"]:
-        cx = int(m["expected_x_pct"] * w)
-        cy = int(m["expected_y_pct"] * h)
-        cw = int(m["width_pct"] * w)
-        ch = int(m["height_pct"] * h)
+        cx = int(m["expected_x"])
+        cy = int(m["expected_y"])
+        cw = int(m["width"])
+        ch = int(m["height"])
         left, top = cx - cw // 2, cy - ch // 2
         right, bottom = cx + cw // 2, cy + ch // 2
         
@@ -493,10 +558,10 @@ def run_component_counting(
     
     # Fill semi-transparent masks for all detected components
     for d in matched_detections:
-        cx = int(d["center_x_pct"] * w)
-        cy = int(d["center_y_pct"] * h)
-        cw = int(d["width_pct"] * w)
-        ch = int(d["height_pct"] * h)
+        cx = int(d["center_x"])
+        cy = int(d["center_y"])
+        cw = int(d["width"])
+        ch = int(d["height"])
         left, top = cx - cw // 2, cy - ch // 2
         right, bottom = cx + cw // 2, cy + ch // 2
         
@@ -514,21 +579,21 @@ def run_component_counting(
         
     # Draw crack and trace defect shapes
     for crk in cracks:
-        if "width_pct" in crk:
-            dcx = int(crk["center_x_pct"] * w)
-            dcy = int(crk["center_y_pct"] * h)
-            dcw = int(crk["width_pct"] * w)
-            dch = int(crk["height_pct"] * h)
+        if "width" in crk and crk["width"] > 0:
+            dcx = int(crk["center_x"])
+            dcy = int(crk["center_y"])
+            dcw = int(crk["width"])
+            dch = int(crk["height"])
             dleft, dtop = dcx - dcw // 2, dcy - dch // 2
             dright, dbottom = dcx + dcw // 2, dcy + dch // 2
             # Draw red defect bounding box
             draw_seg.rectangle([dleft, dtop, dright, dbottom], outline=(255, 51, 51, 255), width=3)
             # Write label
-            lbl = crk["severity"].split(" ")[-3].replace("(", "")
+            lbl = crk["severity"].split(" ")[-3].replace("(", "") if "(" in crk["severity"] else "DEFECT"
             draw_seg.text((dleft + 5, dtop + 5), lbl, fill="#FF3333")
         else:
-            ccx = int(crk["center_x_pct"] * w)
-            ccy = int(crk["center_y_pct"] * h)
+            ccx = int(crk["center_x"])
+            ccy = int(crk["center_y"])
             draw_seg.polygon(
                 [(ccx - 10, ccy - 5), (ccx + 5, ccy - 8), (ccx - 2, ccy + 10), (ccx + 12, ccy + 3), (ccx - 8, ccy + 5)],
                 fill=(51, 153, 255, 255), outline=(255, 255, 255, 255)

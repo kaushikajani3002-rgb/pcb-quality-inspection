@@ -47,11 +47,11 @@ class PositionChecker:
                 act_x_pct = float(d.get("center_x_pct", 0.0))
                 act_y_pct = float(d.get("center_y_pct", 0.0))
                 
-                # Convert normalized percentages to physical millimeters
-                exp_x_mm = exp_x_pct * width_mm
-                exp_y_mm = exp_y_pct * height_mm
-                act_x_mm = act_x_pct * width_mm
-                act_y_mm = act_y_pct * height_mm
+                # Convert normalized percentages (0-100) to physical millimeters
+                exp_x_mm = (exp_x_pct / 100.0) * width_mm
+                exp_y_mm = (exp_y_pct / 100.0) * height_mm
+                act_x_mm = (act_x_pct / 100.0) * width_mm
+                act_y_mm = (act_y_pct / 100.0) * height_mm
                 
                 # Euclidean distance in millimeters
                 distance = math.sqrt((exp_x_mm - act_x_mm) ** 2 + (exp_y_mm - act_y_mm) ** 2)

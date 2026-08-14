@@ -21,8 +21,14 @@ class CrackChecker:
             cracks_found.append({
                 "id": crack.get("id"),
                 "parent_component": crack.get("parent_component"),
-                "center_x": crack.get("center_x"),
-                "center_y": crack.get("center_y"),
+                "center_x_pct": crack.get("center_x_pct", 0.0),
+                "center_y_pct": crack.get("center_y_pct", 0.0),
+                "width_pct": crack.get("width_pct", 0.0),
+                "height_pct": crack.get("height_pct", 0.0),
+                "center_x": crack.get("center_x_pct", 0.0),
+                "center_y": crack.get("center_y_pct", 0.0),
+                "width": crack.get("width_pct", 0.0),
+                "height": crack.get("height_pct", 0.0),
                 "severity": crack.get("severity", "High")
             })
         return cracks_found
