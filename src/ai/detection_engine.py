@@ -93,10 +93,11 @@ def load_model(model_name: str) -> Any:
         logger.error(f"Error initializing YOLO model '{model_name}' from {path}: {e}")
         return None
 
-def normalize_component_coordinates(comp: Dict[str, Any], W: float, H: float) -> Dict[str, Any]:
+def normalize_component_coordinates(comp: Dict[str, Any], W: float, H: float, board_box: List[float] = None) -> Dict[str, Any]:
     """
     Ensures that every component dictionary conforms to a single consistent coordinate schema.
     Calculates percentage values in 0-100 range and maps pixels consistently.
+    If board_box is provided, projects normalized expected coordinates onto the board.
     """
     c = comp.copy()
     c.setdefault("id", "Unknown")
@@ -144,10 +145,20 @@ def normalize_component_coordinates(comp: Dict[str, Any], W: float, H: float) ->
             w_ratio = w_pct / 100.0
             h_ratio = h_pct / 100.0
             
-        cx = cx_ratio * W
-        cy = cy_ratio * H
-        width = w_ratio * W
-        height = h_ratio * H
+        if board_box is not None and len(board_box) == 4:
+            bx1, by1, bx2, by2 = board_box
+            bw = bx2 - bx1
+            bh = by2 - by1
+            cx = bx1 + cx_ratio * bw
+            cy = by1 + cy_ratio * bh
+            width = w_ratio * bw
+            height = h_ratio * bh
+        else:
+            cx = cx_ratio * W
+            cy = cy_ratio * H
+            width = w_ratio * W
+            height = h_ratio * H
+            
         x1 = cx - width / 2.0
         y1 = cy - height / 2.0
         x2 = cx + width / 2.0
@@ -374,62 +385,134 @@ def run_component_counting(
 
     w, h = img.size
     
-    # 2. Default fallback values
-    expected_comps = [normalize_component_coordinates(c, w, h) for c in active_template.get("components", [])]
-    total_comps = len(expected_comps)
+    # 2. Parse Template default values and component types
+    raw_expected = active_template.get("components", [])
+    total_comps = len(raw_expected)
     
     board_dims = active_template.get("board_dimensions", {})
     width_mm = float(board_dims.get("width_mm", 100.0))
     height_mm = float(board_dims.get("height_mm", 100.0))
     
     template_counts = {}
-    for c in expected_comps:
+    for c in raw_expected:
         t = c["type"]
         template_counts[t] = template_counts.get(t, 0) + 1
         
-    # 3. Model Inference
+    # 3. Model Inference (Two-pass alignment and detection pipeline)
     raw_detections = []
     raw_details = []
+    pcb_box = None
+    
     if component_model is not None:
         try:
-             logger.info(f"[INFERENCE]\nConfidence Threshold: {conf_slider}\nIoU Threshold: {iou_slider}\nModel: Component Detector")
-             results = component_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
-             boxes = results[0].boxes
-             logger.info(f"[INFERENCE RESULT] Final component detections after confidence & NMS: {len(boxes)}")
-             for box in boxes:
+             # Pass 1: Run YOLO on original image to locate PCB board outline
+             logger.info(f"[INFERENCE PASS 1] Locating PCB board boundary. Conf: {conf_slider}")
+             results_pass1 = component_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
+             boxes_pass1 = results_pass1[0].boxes
+             for box in boxes_pass1:
                  cls_id = int(box.cls[0])
-                 conf = float(box.conf[0])
                  class_name = component_model.names.get(cls_id, f"Class {cls_id}")
+                 if "pcb" in class_name.lower():
+                     pcb_box = box.xyxy[0].tolist()
+                     logger.info(f"[ALIGNMENT] Found PCB board outline bounding box: {pcb_box}")
+                     break
+                     
+             # If PCB board outline is found, crop and run Pass 2 on the normalized board
+             if pcb_box is not None:
+                 bx1, by1, bx2, by2 = pcb_box
+                 bw = bx2 - bx1
+                 bh = by2 - by1
                  
-                 # Extract pixel coordinates
-                 xyxy = box.xyxy[0].tolist()
-                 x1, y1, x2, y2 = xyxy
-                 xywh = box.xywh[0].tolist()
-                 cx, cy, w_box, h_box = xywh
+                 # Crop and resize to template's pixel dimensions
+                 t_w = int(board_dims.get("pixel_width", 640))
+                 t_h = int(board_dims.get("pixel_height", 480))
                  
-                 logger.info(f"  [RAW DET] ClassID: {cls_id}, Name: '{class_name}', Conf: {conf:.4f}, BBox: [{x1:.1f}, {y1:.1f}, {x2:.1f}, {y2:.1f}], Center: ({cx:.1f}, {cy:.1f}), Size: {w_box:.1f}x{h_box:.1f}")
+                 cropped_img = img.crop((bx1, by1, bx2, by2))
+                 normalized_img = cropped_img.resize((t_w, t_h), Image.Resampling.LANCZOS)
                  
-                 # Apply class mapping
-                 mapped_type = map_class_to_component_type(class_name)
+                 # Pass 2: Run YOLO on the cropped, resized board image
+                 logger.info(f"[INFERENCE PASS 2] Running component model on normalized board image.")
+                 results_pass2 = component_model.predict(source=normalized_img, conf=conf_slider, iou=iou_slider, imgsz=640)
+                 boxes_pass2 = results_pass2[0].boxes
+                 logger.info(f"[INFERENCE PASS 2 RESULT] Detected {len(boxes_pass2)} components on cropped board.")
                  
-                 # Centralized coordinate normalization
-                 raw_det = normalize_component_coordinates({
-                     "class_id": cls_id,
-                     "class_name": class_name,
-                     "type": mapped_type,
-                     "confidence": float(conf),
-                     "x1": x1,
-                     "y1": y1,
-                     "x2": x2,
-                     "y2": y2
+                 # Append the PCB board itself to raw detections
+                 pcb_det = normalize_component_coordinates({
+                     "class_id": 14,
+                     "class_name": "PCB",
+                     "type": "PCB",
+                     "confidence": 1.0,
+                     "x1": bx1,
+                     "y1": by1,
+                     "x2": bx2,
+                     "y2": by2
                  }, w, h)
+                 raw_detections.append(pcb_det)
+                 raw_details.append(pcb_det)
                  
-                 raw_detections.append(raw_det)
-                 raw_details.append(raw_det)
+                 # Map detected component coordinates back to the original image space
+                 for box in boxes_pass2:
+                     cls_id = int(box.cls[0])
+                     conf = float(box.conf[0])
+                     class_name = component_model.names.get(cls_id, f"Class {cls_id}")
+                     if "pcb" in class_name.lower():
+                         continue # skip redundant PCB board class inside the cropped board
+                         
+                     dx1_norm, dy1_norm, dx2_norm, dy2_norm = box.xyxy[0].tolist()
+                     
+                     # Inverse transform mapping back to original image space
+                     dx1_orig = bx1 + (dx1_norm / t_w) * bw
+                     dy1_orig = by1 + (dy1_norm / t_h) * bh
+                     dx2_orig = bx1 + (dx2_norm / t_w) * bw
+                     dy2_orig = by1 + (dy2_norm / t_h) * bh
+                     
+                     mapped_type = map_class_to_component_type(class_name)
+                     
+                     raw_det = normalize_component_coordinates({
+                         "class_id": cls_id,
+                         "class_name": class_name,
+                         "type": mapped_type,
+                         "confidence": float(conf),
+                         "x1": dx1_orig,
+                         "y1": dy1_orig,
+                         "x2": dx2_orig,
+                         "y2": dy2_orig
+                     }, w, h)
+                     
+                     raw_detections.append(raw_det)
+                     raw_details.append(raw_det)
+             else:
+                 # Fallback: Run directly on the original image
+                 logger.info("[ALIGNMENT] PCB outline not detected. Running inference on original image.")
+                 for box in boxes_pass1:
+                     cls_id = int(box.cls[0])
+                     conf = float(box.conf[0])
+                     class_name = component_model.names.get(cls_id, f"Class {cls_id}")
+                     
+                     xyxy = box.xyxy[0].tolist()
+                     x1, y1, x2, y2 = xyxy
+                     mapped_type = map_class_to_component_type(class_name)
+                     
+                     raw_det = normalize_component_coordinates({
+                         "class_id": cls_id,
+                         "class_name": class_name,
+                         "type": mapped_type,
+                         "confidence": float(conf),
+                         "x1": x1,
+                         "y1": y1,
+                         "x2": x2,
+                         "y2": y2
+                     }, w, h)
+                     
+                     raw_detections.append(raw_det)
+                     raw_details.append(raw_det)
         except Exception as e:
-            logger.error(f"YOLO Component Inference failed: {e}")
+             logger.error(f"YOLO Component Inference pipeline failed: {e}")
     else:
-        logger.warning("Component model is offline/None. Returning empty detections.")
+         logger.warning("Component model is offline/None. Returning empty detections.")
+         
+    # 2b. Normalize expected template components (project onto detected PCB board box if available)
+    expected_comps = [normalize_component_coordinates(c, w, h, board_box=pcb_box) for c in raw_expected]
         
     # 4. Spatially match detections to template expected layout
     matched_detections, matching_decisions = match_detections_to_template(expected_comps, raw_detections, width_mm, height_mm)
