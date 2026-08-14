@@ -53,7 +53,7 @@ class ConfigLoader:
                 "inspection": {
                     "confidence": 0.50,
                     "iou": 0.45,
-                    "position_tolerance": 15.0
+                    "position_tolerance": 1.5
                 },
                 "paths": {
                     "template_folder": "templates",

@@ -58,7 +58,7 @@ try:
         defect_mode=True,
         confidence_threshold=0.5,
         iou_threshold=0.45,
-        position_tolerance=15.0
+        position_tolerance=1.5
     )
     print(f"Mock inspection completed: Status={mock_results.get('status')}, Issues={mock_results.get('total_issues')}")
     print("✔ Mock Inspection pipeline succeeded!")

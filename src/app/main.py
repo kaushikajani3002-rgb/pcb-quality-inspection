@@ -203,14 +203,8 @@ with st.sidebar:
         step=0.05
     )
 
-    position_tolerance = st.slider(
-        "Position Tolerance (mm)", 
-        min_value=0.1, 
-        max_value=5.0, 
-        value=1.5,
-        step=0.1,
-        help="Euclidean physical displacement limit in millimeters."
-    )
+    # Load Position Tolerance from configuration (defaulting to 1.5 mm fallback)
+    position_tolerance = float(config.get("inspection.position_tolerance", 1.5))
 
     st.markdown("---")
     st.subheader("Model Status")
