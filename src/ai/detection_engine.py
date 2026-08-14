@@ -221,7 +221,26 @@ def run_component_counting(
         img = Image.open(uploaded_image).convert("RGB")
     else:
         img = uploaded_image
-        
+
+    # Apply PCB perspective alignment warping
+    try:
+        from src.ai.alignment import align_pcb_image
+        from src.utils.config_loader import ConfigLoader
+        # Check if reference image is available (e.g. from template)
+        ref_image_path = active_template.get("reference_image")
+        ref_img = None
+        if ref_image_path:
+            config_loader = ConfigLoader()
+            ref_path = config_loader.project_root / ref_image_path
+            if ref_path.exists():
+                ref_img = Image.open(ref_path).convert("RGB")
+                
+        if ref_img is not None:
+            logger.info("Applying ORB homography alignment warping on target image...")
+            img = align_pcb_image(img, ref_img)
+    except Exception as e:
+        logger.error(f"PCB Image Alignment warping failed: {e}. Proceeding with original target image.")
+
     w, h = img.size
     
     # 2. Default fallback values
