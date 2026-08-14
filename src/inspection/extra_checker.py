@@ -21,6 +21,9 @@ class ExtraChecker:
         
         for d in detected:
             d_id = d.get("id")
+            # Ignore the PCB board itself
+            if str(d.get("type", "")).lower() == "pcb" or str(d.get("class_name", "")).lower() == "pcb":
+                continue
             # If the ID is not in template, or component is explicitly marked extra
             if d_id not in expected_ids or d.get("status") == "Extra":
                 extra_components.append({

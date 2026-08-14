@@ -332,19 +332,17 @@ def match_detections_to_template(
                 
     return matched_detections, matching_decisions
 
-def run_component_counting(
+def run_component_inspection(
     uploaded_image: Any, 
     component_model: Any, 
     conf_slider: float, 
     iou_slider: float, 
     active_template: Dict[str, Any], 
-    position_tolerance_slider: float,
-    defect_mode: bool = False,
-    defect_model: Any = None
+    position_tolerance_slider: float
 ) -> Dict[str, Any]:
     """
-    Executes YOLO11m component detection on an uploaded image, maps the predictions 
-    to reference template coordinates, runs the verification engine, and renders the overlays.
+    Executes component verification on the component image.
+    Uses two-pass crop-and-resize board detection to dynamically align template.
     """
     start_time = time.time()
     
@@ -362,28 +360,8 @@ def run_component_counting(
         img = uploaded_image
 
     img_np = np.array(img)
-    logger.info(f"[IMAGE UPLOAD] Received target image: Name='{filename}', Shape={img_np.shape}, Mode='{img.mode}', Dtype={img_np.dtype}")
-
-    # Apply PCB perspective alignment warping
-    try:
-        from src.ai.alignment import align_pcb_image
-        from src.utils.config_loader import ConfigLoader
-        # Check if reference image is available (e.g. from template)
-        ref_image_path = active_template.get("reference_image")
-        ref_img = None
-        if ref_image_path:
-            config_loader = ConfigLoader()
-            ref_path = config_loader.project_root / ref_image_path
-            if ref_path.exists():
-                ref_img = Image.open(ref_path).convert("RGB")
-                
-        if ref_img is not None:
-            logger.info("Applying ORB homography alignment warping on target image...")
-            img = align_pcb_image(img, ref_img)
-    except Exception as e:
-        logger.error(f"PCB Image Alignment warping failed: {e}. Proceeding with original target image.")
-
     w, h = img.size
+    logger.info(f"[COMP INSPECTION] Target image: Name='{filename}', Shape={img_np.shape}, Mode='{img.mode}'")
     
     # 2. Parse Template default values and component types
     raw_expected = active_template.get("components", [])
@@ -406,7 +384,7 @@ def run_component_counting(
     if component_model is not None:
         try:
              # Pass 1: Run YOLO on original image to locate PCB board outline
-             logger.info(f"[INFERENCE PASS 1] Locating PCB board boundary. Conf: {conf_slider}")
+             logger.info(f"[COMP INSPECTION PASS 1] Locating PCB board boundary. Conf: {conf_slider}")
              results_pass1 = component_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
              boxes_pass1 = results_pass1[0].boxes
              for box in boxes_pass1:
@@ -431,12 +409,12 @@ def run_component_counting(
                  normalized_img = cropped_img.resize((t_w, t_h), Image.Resampling.LANCZOS)
                  
                  # Pass 2: Run YOLO on the cropped, resized board image
-                 logger.info(f"[INFERENCE PASS 2] Running component model on normalized board image.")
+                 logger.info(f"[COMP INSPECTION PASS 2] Running component model on normalized board image.")
                  results_pass2 = component_model.predict(source=normalized_img, conf=conf_slider, iou=iou_slider, imgsz=640)
                  boxes_pass2 = results_pass2[0].boxes
-                 logger.info(f"[INFERENCE PASS 2 RESULT] Detected {len(boxes_pass2)} components on cropped board.")
+                 logger.info(f"[COMP INSPECTION PASS 2 RESULT] Detected {len(boxes_pass2)} components on cropped board.")
                  
-                 # Append the PCB board itself to raw detections
+                 # Append the PCB board itself to raw detections for visualization / reference
                  pcb_det = normalize_component_coordinates({
                      "class_id": 14,
                      "class_name": "PCB",
@@ -530,53 +508,9 @@ def run_component_counting(
     # Calculate counts by type
     detected_counts = {}
     for d in matched_detections:
-        if d.get("status") != "Extra":
+        if d.get("status") != "Extra" and str(d.get("type", "")).lower() != "pcb":
             t = d["type"]
             detected_counts[t] = detected_counts.get(t, 0) + 1
-            
-    # 6. Solder & Trace Defect Detection (Real model inference or Simulation fallback)
-    cracks = []
-    if defect_model is not None:
-        try:
-            logger.info(f"[INFERENCE]\nConfidence Threshold: {conf_slider}\nIoU Threshold: {iou_slider}\nModel: Defect Detector")
-            defect_results = defect_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
-            boxes = defect_results[0].boxes
-            logger.info(f"[INFERENCE RESULT] Final defect detections after confidence & NMS: {len(boxes)}")
-            for box in boxes:
-                cls_id = int(box.cls[0])
-                conf = float(box.conf[0])
-                class_name = defect_model.names.get(cls_id, f"Class {cls_id}")
-                xywhn = box.xywhn[0].tolist()
-                cx_pct, cy_pct, w_pct, h_pct = xywhn
-                
-                cracks.append(normalize_component_coordinates({
-                    "id": f"DEF_{class_name.upper()}_{len(cracks)+1:02d}",
-                    "parent_component": "Board/Trace",
-                    "center_x_pct": cx_pct,
-                    "center_y_pct": cy_pct,
-                    "width_pct": w_pct,
-                    "height_pct": h_pct,
-                    "severity": f"High ({class_name} @ {conf:.2f})"
-                }, w, h))
-        except Exception as e:
-            logger.error(f"YOLO Defect Inference failed: {e}")
-            
-    # Fallback to simulation cracks if no real model is present and defect mode is toggled
-    if defect_model is None and defect_mode:
-        correct_comps = [d for d in matched_detections if d.get("status") == "Correct"]
-        if correct_comps:
-            crack_target = correct_comps[-1]  # Pick last correct component to corrupt
-            crack_id = f"CRK_{crack_target['id']}"
-            cracks.append(normalize_component_coordinates({
-                "id": crack_id,
-                "parent_component": crack_target["id"],
-                "center_x_pct": crack_target["center_x_pct"] + (crack_target["width_pct"] / 3.0),
-                "center_y_pct": crack_target["center_y_pct"] + (crack_target["height_pct"] / 3.0),
-                "width_pct": crack_target["width_pct"] / 3.0,
-                "height_pct": crack_target["height_pct"] / 3.0,
-                "severity": "High (Solder Joint Fracture)"
-            }, w, h))
-            crack_target["status"] = "Crack Detected"
             
     # 7. Render Annotated Bounding Box Image (Detection View)
     annotated_image = img.copy()
@@ -584,6 +518,10 @@ def run_component_counting(
     
     # Draw detections
     for d in matched_detections:
+        # Prevent drawing PCB board outline itself as a component detection box
+        if str(d.get("type", "")).lower() == "pcb" or str(d.get("class_name", "")).lower() == "pcb":
+            continue
+            
         cx = int(d["center_x"])
         cy = int(d["center_y"])
         cw = int(d["width"])
@@ -635,70 +573,18 @@ def run_component_counting(
         draw.line([(left, bottom), (right, top)], fill="#FF3333", width=1)
         draw.text((left + 5, top + 5), f"MISSING: {m['id']}", fill="#FF3333")
         
-    # 8. Render Segmentation Overlay Image (Solder / Defect View)
-    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    draw_seg = ImageDraw.Draw(overlay)
-    
-    # Fill semi-transparent masks for all detected components
-    for d in matched_detections:
-        cx = int(d["center_x"])
-        cy = int(d["center_y"])
-        cw = int(d["width"])
-        ch = int(d["height"])
-        left, top = cx - cw // 2, cy - ch // 2
-        right, bottom = cx + cw // 2, cy + ch // 2
-        
-        status = d.get("status", "Correct")
-        if status == "Correct":
-            fill_color = (0, 255, 102, 60)   # Green tint
-        elif status == "Misaligned":
-            fill_color = (255, 204, 0, 80)   # Yellow tint
-        elif status == "Crack Detected":
-            fill_color = (51, 153, 255, 80)  # Blue tint
-        else:
-            fill_color = (225, 29, 72, 80)   # Red/Pink tint
-            
-        draw_seg.rectangle([left, top, right, bottom], fill=fill_color)
-        
-    # Draw crack and trace defect shapes
-    for crk in cracks:
-        if "width" in crk and crk["width"] > 0:
-            dcx = int(crk["center_x"])
-            dcy = int(crk["center_y"])
-            dcw = int(crk["width"])
-            dch = int(crk["height"])
-            dleft, dtop = dcx - dcw // 2, dcy - dch // 2
-            dright, dbottom = dcx + dcw // 2, dcy + dch // 2
-            # Draw red defect bounding box
-            draw_seg.rectangle([dleft, dtop, dright, dbottom], outline=(255, 51, 51, 255), width=3)
-            # Write label
-            lbl = crk["severity"].split(" ")[-3].replace("(", "") if "(" in crk["severity"] else "DEFECT"
-            draw_seg.text((dleft + 5, dtop + 5), lbl, fill="#FF3333")
-        else:
-            ccx = int(crk["center_x"])
-            ccy = int(crk["center_y"])
-            draw_seg.polygon(
-                [(ccx - 10, ccy - 5), (ccx + 5, ccy - 8), (ccx - 2, ccy + 10), (ccx + 12, ccy + 3), (ccx - 8, ccy + 5)],
-                fill=(51, 153, 255, 255), outline=(255, 255, 255, 255)
-            )
-            draw_seg.text((ccx - 20, ccy - 20), "CRACK DETECTED", fill="#3399FF")
-        
-    # Composite segmentation mask on top of original image
-    segmentation_image = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
-    
-    # 9. Determine overall status (FAIL if missing, misaligned, extra, or cracks)
-    has_anomalies = (
-        len(inspection_results["missing"]) > 0 or 
-        len(inspection_results["extra"]) > 0 or 
-        len(inspection_results["misaligned"]) > 0 or 
-        len(cracks) > 0
-    )
-    overall_status = "FAIL" if has_anomalies else "PASS"
-    
     duration = time.time() - start_time
     processing_time_str = f"{duration:.3f} sec"
     
-    # Build dynamic debug info payload for Streamlit operator dashboard
+    # Check if component status is PASS or FAIL
+    has_anomalies = (
+        len(inspection_results["missing"]) > 0 or 
+        len(inspection_results["extra"]) > 0 or 
+        len(inspection_results["misaligned"]) > 0
+    )
+    status = "FAIL" if has_anomalies else "PASS"
+    
+    # Build debug info payload
     import torch
     cuda_avail = torch.cuda.is_available()
     cuda_dev = torch.cuda.get_device_name(0) if cuda_avail else "N/A"
@@ -716,7 +602,7 @@ def run_component_counting(
         "image_channels": img_np.shape[2] if len(img_np.shape) > 2 else 1,
         "confidence_threshold": conf_slider,
         "iou_threshold": iou_slider,
-        "raw_detections": raw_details,
+        "raw_detections": [d for d in raw_details if str(d.get("type", "")).lower() != "pcb"],
         "filtered_detections": [
             {
                 "id": d.get("id", "N/A"),
@@ -725,7 +611,7 @@ def run_component_counting(
                 "center_y_pct": d.get("center_y_pct", 0.0),
                 "status": d.get("status", "Unknown"),
                 "confidence": d.get("confidence", 0.0)
-            } for d in matched_detections
+            } for d in matched_detections if str(d.get("type", "")).lower() != "pcb"
         ],
         "template": [
             {
@@ -737,32 +623,233 @@ def run_component_counting(
         ],
         "matching": matching_decisions,
         "final": {
-            "detected_count": len(matched_detections),
-            "placed_count": len([d for d in matched_detections if d.get("status") in ["Correct", "Misaligned"]]),
+            "detected_count": len([d for d in matched_detections if str(d.get("type", "")).lower() != "pcb"]),
+            "placed_count": len([d for d in matched_detections if d.get("status") in ["Correct", "Misaligned"] and str(d.get("type", "")).lower() != "pcb"]),
             "missing_count": len(inspection_results["missing"]),
-            "extra_count": len(inspection_results["extra"]),
-            "anomaly_count": len(inspection_results["missing"]) + len(inspection_results["extra"]) + len(inspection_results["misaligned"]) + len(cracks)
+            "extra_count": len([e for e in inspection_results["extra"] if str(e.get("type", "")).lower() != "pcb"]),
+            "anomaly_count": len(inspection_results["missing"]) + len([e for e in inspection_results["extra"] if str(e.get("type", "")).lower() != "pcb"]) + len(inspection_results["misaligned"])
         }
     }
     
     return {
-        "status": overall_status,
+        "status": status,
         "processing_time": processing_time_str,
         "template_name": active_template.get("board_name", "Unknown PCB"),
         "component_statistics": {
             "total_expected": total_comps,
-            "total_detected": len(matched_detections),
+            "total_detected": len([d for d in matched_detections if str(d.get("type", "")).lower() != "pcb"]),
             "by_type": template_counts
         },
-        "detected_components": matched_detections,
+        "detected_components": [d for d in matched_detections if str(d.get("type", "")).lower() != "pcb"],
         "detected_counts": detected_counts,
         "missing": inspection_results["missing"],
-        "extra": inspection_results["extra"],
+        "extra": [e for e in inspection_results["extra"] if str(e.get("type", "")).lower() != "pcb"],
         "misaligned": inspection_results["misaligned"],
-        "cracks": cracks,
         "annotated_image": annotated_image,
-        "segmentation_image": segmentation_image,
         "original_image": img,
+        "debug_info": debug_info
+    }
+
+def run_circuit_inspection(
+    uploaded_image: Any, 
+    defect_model: Any, 
+    conf_slider: float, 
+    iou_slider: float,
+    defect_mode: bool = False,
+    matched_detections: List[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Executes trace & solder joint inspection on the circuit image.
+    """
+    start_time = time.time()
+    
+    # 1. Load image and get dimensions
+    import numpy as np
+    filename = "PIL Image Object"
+    if hasattr(uploaded_image, "name"):
+        filename = uploaded_image.name
+    elif hasattr(uploaded_image, "filename"):
+        filename = uploaded_image.filename
+        
+    if not isinstance(uploaded_image, Image.Image):
+        img = Image.open(uploaded_image).convert("RGB")
+    else:
+        img = uploaded_image
+
+    img_np = np.array(img)
+    w, h = img.size
+    logger.info(f"[CIRCUIT INSPECTION] Target image: Name='{filename}', Shape={img_np.shape}, Mode='{img.mode}'")
+    
+    cracks = []
+    
+    # 2. Model Inference
+    if defect_model is not None:
+        try:
+            logger.info(f"[CIRCUIT INSPECTION INFERENCE]\nConfidence Threshold: {conf_slider}\nIoU Threshold: {iou_slider}\nModel: Defect Detector")
+            defect_results = defect_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
+            boxes = defect_results[0].boxes
+            logger.info(f"[CIRCUIT INFERENCE RESULT] Final defect detections: {len(boxes)}")
+            for box in boxes:
+                cls_id = int(box.cls[0])
+                conf = float(box.conf[0])
+                class_name = defect_model.names.get(cls_id, f"Class {cls_id}")
+                xywhn = box.xywhn[0].tolist()
+                cx_pct, cy_pct, w_pct, h_pct = xywhn
+                
+                # Check for bounding box coordinates
+                xyxy = box.xyxy[0].tolist()
+                dx1, dy1, dx2, dy2 = xyxy
+                
+                cracks.append(normalize_component_coordinates({
+                    "id": f"DEF_{class_name.upper()}_{len(cracks)+1:02d}",
+                    "parent_component": "Board/Trace",
+                    "center_x_pct": cx_pct * 100.0,
+                    "center_y_pct": cy_pct * 100.0,
+                    "width_pct": w_pct * 100.0,
+                    "height_pct": h_pct * 100.0,
+                    "x1": dx1,
+                    "y1": dy1,
+                    "x2": dx2,
+                    "y2": dy2,
+                    "confidence": conf,
+                    "class_name": class_name,
+                    "type": "Defect",
+                    "severity": f"High ({class_name} @ {conf:.2f})"
+                }, w, h))
+        except Exception as e:
+            logger.error(f"YOLO Defect Inference failed: {e}")
+            
+    # Fallback to simulated cracks if no real model is present and defect mode is toggled
+    if defect_model is None and defect_mode:
+        if matched_detections:
+            correct_comps = [d for d in matched_detections if d.get("status") == "Correct"]
+            if correct_comps:
+                crack_target = correct_comps[-1]  # Pick last correct component to corrupt
+                crack_id = f"CRK_{crack_target['id']}"
+                cracks.append(normalize_component_coordinates({
+                    "id": crack_id,
+                    "parent_component": crack_target["id"],
+                    "center_x_pct": crack_target["center_x_pct"] + (crack_target["width_pct"] / 3.0),
+                    "center_y_pct": crack_target["center_y_pct"] + (crack_target["height_pct"] / 3.0),
+                    "width_pct": crack_target["width_pct"] / 3.0,
+                    "height_pct": crack_target["height_pct"] / 3.0,
+                    "confidence": 0.95,
+                    "class_name": "Solder Crack",
+                    "type": "Defect",
+                    "severity": "High (Solder Joint Fracture)"
+                }, w, h))
+                crack_target["status"] = "Crack Detected"
+                
+    # 3. Render Defect Overlay Image
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw_seg = ImageDraw.Draw(overlay)
+    
+    # Draw cracks
+    for crk in cracks:
+        if "x1" in crk:
+            dleft = int(crk["x1"])
+            dtop = int(crk["y1"])
+            dright = int(crk["x2"])
+            dbottom = int(crk["y2"])
+            
+            draw_seg.rectangle([dleft, dtop, dright, dbottom], outline=(255, 51, 51, 255), width=3)
+            fill_color = (255, 51, 51, 40)
+            draw_seg.rectangle([dleft, dtop, dright, dbottom], fill=fill_color)
+            
+            lbl = f"{crk['class_name']} ({crk['confidence']:.2f})"
+            draw_seg.text((dleft + 5, dtop + 5), lbl, fill="#FF3333")
+        else:
+            ccx = int(crk["center_x"])
+            ccy = int(crk["center_y"])
+            draw_seg.polygon(
+                [(ccx - 10, ccy - 5), (ccx + 5, ccy - 8), (ccx - 2, ccy + 10), (ccx + 12, ccy + 3), (ccx - 8, ccy + 5)],
+                fill=(51, 153, 255, 255), outline=(255, 255, 255, 255)
+            )
+            draw_seg.text((ccx - 20, ccy - 20), "CRACK DETECTED", fill="#3399FF")
+            
+    # Composite segmentation mask on top of original image
+    segmentation_image = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+    
+    duration = time.time() - start_time
+    processing_time_str = f"{duration:.3f} sec"
+    
+    status = "FAIL" if len(cracks) > 0 else "PASS"
+    
+    return {
+        "status": status,
+        "processing_time": processing_time_str,
+        "defects": cracks,
+        "annotated_image": segmentation_image,
+        "original_image": img
+    }
+
+def run_component_counting(
+    uploaded_image: Any, 
+    component_model: Any, 
+    conf_slider: float, 
+    iou_slider: float, 
+    active_template: Dict[str, Any], 
+    position_tolerance_slider: float,
+    defect_mode: bool = False,
+    defect_model: Any = None
+) -> Dict[str, Any]:
+    """
+    Legacy wrapper / backward compatibility function mapping to the split inspection engines.
+    """
+    comp_res = run_component_inspection(
+        uploaded_image=uploaded_image,
+        component_model=component_model,
+        conf_slider=conf_slider,
+        iou_slider=iou_slider,
+        active_template=active_template,
+        position_tolerance_slider=position_tolerance_slider
+    )
+    
+    if defect_model is not None or defect_mode:
+        circ_res = run_circuit_inspection(
+            uploaded_image=uploaded_image,
+            defect_model=defect_model,
+            conf_slider=conf_slider,
+            iou_slider=iou_slider,
+            defect_mode=defect_mode,
+            matched_detections=comp_res["detected_components"]
+        )
+        cracks = circ_res["defects"]
+        segmentation_image = circ_res["annotated_image"]
+    else:
+        cracks = []
+        segmentation_image = comp_res["annotated_image"]
+        
+    has_anomalies = (
+        len(comp_res["missing"]) > 0 or 
+        len(comp_res["extra"]) > 0 or 
+        len(comp_res["misaligned"]) > 0 or 
+        len(cracks) > 0
+    )
+    overall_status = "FAIL" if has_anomalies else "PASS"
+    
+    debug_info = comp_res["debug_info"]
+    debug_info["final"]["anomaly_count"] = (
+        len(comp_res["missing"]) + 
+        len(comp_res["extra"]) + 
+        len(comp_res["misaligned"]) + 
+        len(cracks)
+    )
+    
+    return {
+        "status": overall_status,
+        "processing_time": comp_res["processing_time"],
+        "template_name": comp_res["template_name"],
+        "component_statistics": comp_res["component_statistics"],
+        "detected_components": comp_res["detected_components"],
+        "detected_counts": comp_res["detected_counts"],
+        "missing": comp_res["missing"],
+        "extra": comp_res["extra"],
+        "misaligned": comp_res["misaligned"],
+        "cracks": cracks,
+        "annotated_image": comp_res["annotated_image"],
+        "segmentation_image": segmentation_image,
+        "original_image": comp_res["original_image"],
         "debug_info": debug_info
     }
 

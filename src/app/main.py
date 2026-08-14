@@ -37,7 +37,7 @@ from src.utils.constants import (
 from src.mock.mock_results import MockInspectionService
 from src.inspection.inspection_engine import InspectionEngine
 from src.ai.detection_engine import (
-    load_model, run_component_counting, run_defect_detection,
+    load_model, run_component_inspection, run_circuit_inspection,
     build_inventory_table, compute_dashboard_metrics
 )
 
@@ -94,20 +94,18 @@ if "workflow_status" not in st.session_state:
     st.session_state.workflow_status = STATE_IDLE
 if "current_pcb_template" not in st.session_state:
     st.session_state.current_pcb_template = {}
-if "active_inspection_results" not in st.session_state:
-    st.session_state.active_inspection_results = {}
-if "original_image" not in st.session_state:
-    st.session_state.original_image = None
-if "detection_image" not in st.session_state:
-    st.session_state.detection_image = None
-if "segmentation_image" not in st.session_state:
-    st.session_state.segmentation_image = None
+if "comp_results" not in st.session_state:
+    st.session_state.comp_results = None
+if "circ_results" not in st.session_state:
+    st.session_state.circ_results = None
 if "error_message" not in st.session_state:
     st.session_state.error_message = ""
 if "selected_template" not in st.session_state:
     st.session_state.selected_template = "Arduino Uno"
-if "selected_defect_model" not in st.session_state:
-    st.session_state.selected_defect_model = "DeepPCB"
+if "last_comp_file_name" not in st.session_state:
+    st.session_state.last_comp_file_name = None
+if "last_circ_file_name" not in st.session_state:
+    st.session_state.last_circ_file_name = None
 
 # Load configurations
 try:
@@ -120,19 +118,11 @@ except Exception as e:
 def on_template_change():
     new_template_lbl = st.session_state.temp_select_key
     st.session_state.selected_template = new_template_lbl
-    device_options = {
-        "Arduino Uno": "arduino_uno",
-        "ESP32 DevKit": "esp32_devkit",
-        "STM32 Blue Pill": "stm32_blue_pill",
-        "Generic PCB": "generic_pcb"
-    }
-    stem = device_options.get(new_template_lbl, "generic_pcb")
-    mapping_entry = config.get(f"models.defect_mapping.{stem}")
-    if isinstance(mapping_entry, dict):
-        default_model = mapping_entry.get("name", "TDD-PCB")
-    else:
-        default_model = mapping_entry or "TDD-PCB"
-    st.session_state.selected_defect_model = default_model
+    # Clear old inspection results
+    st.session_state.comp_results = None
+    st.session_state.circ_results = None
+    st.session_state.workflow_status = STATE_IDLE
+    logger.info(f"PCB Profile Template changed to: {new_template_lbl}. Old results cleared.")
 
 # Resolve directories
 report_dir = config.get_resolved_path("report_folder")
@@ -155,7 +145,7 @@ with st.sidebar:
     
     st.header("Operator Controls")
     
-    # 1. Device Selection Dropdown - Mapped strictly to the three requested options
+    # 1. Device Selection Dropdown
     device_options = {
         "Arduino Uno": "arduino_uno",
         "ESP32 DevKit": "esp32_devkit",
@@ -179,20 +169,14 @@ with st.sidebar:
     selected_template_stem = device_options[selected_device_lbl]
     st.session_state.selected_template = selected_device_lbl
     
-    # 2. Image File Uploader
-    uploaded_file = st.file_uploader(
-        "Upload PCB Image", 
-        type=["png", "jpg", "jpeg"],
-        help="Upload target board camera feed. (Max size: 15MB)"
-    )
-
-    # 3. Parameters Sliders (Confidence, IoU, and Position Tolerance in mm)
+    # 2. Parameters Sliders
     conf_threshold = st.slider(
         "Confidence Threshold", 
         min_value=0.0, 
         max_value=1.0, 
         value=float(config.get("inspection.confidence", 0.50)),
-        step=0.05
+        step=0.05,
+        help="YOLO model classification score cut-off."
     )
     
     iou_threshold = st.slider(
@@ -200,50 +184,59 @@ with st.sidebar:
         min_value=0.0, 
         max_value=1.0, 
         value=float(config.get("inspection.iou", 0.45)),
-        step=0.05
+        step=0.05,
+        help="Non-Maximum Suppression (NMS) bounding boxes intersection slider."
     )
 
-    # Load Position Tolerance from configuration (defaulting to 1.5 mm fallback)
+    # Load Position Tolerance from configuration
     position_tolerance = float(config.get("inspection.position_tolerance", 1.5))
 
     st.markdown("---")
     st.subheader("Model Status")
     
-    # Check if component detector weights exist on disk
-    comp_config = config.get("models.component_model")
-    if isinstance(comp_config, dict):
-        comp_path_rel = comp_config.get("path")
-    else:
-        comp_path_rel = "models/trained/Component/All_cercit_finetuned_best.pt"
-    comp_exists = (config.project_root / comp_path_rel).exists() if comp_path_rel else False
-
-    # Auto-resolved defect model from PCB template (via on_template_change callback)
-    selected_defect_model_lbl = st.session_state.selected_defect_model
-
-    # Check if defect detector weights exist on disk
+    # Lazy loading models through ModelManager
+    from src.ai.model_manager import ModelManager
+    model_manager = ModelManager()
+    
+    comp_model = None
+    defect_model = None
+    comp_ready = False
+    def_ready = False
+    comp_err_msg = ""
+    def_err_msg = ""
+    
+    # Resolve defect model mapping name
     defect_mapping = config.get("models.defect_mapping") or {}
     mapping_entry = defect_mapping.get(selected_template_stem)
     if isinstance(mapping_entry, dict):
-        def_path_rel = mapping_entry.get("path")
+        selected_defect_model_name = mapping_entry.get("name", "Defect Detector")
     else:
-        def_path_rel = None
-    def_exists = (config.project_root / def_path_rel).exists() if def_path_rel else False
+        selected_defect_model_name = mapping_entry or "Defect Detector"
 
-    # Display status with colors
-    if comp_exists:
-        st.markdown("<span style='color:#10b981; font-weight:bold;'>Component Detector ✓ Ready</span>", unsafe_allow_html=True)
+    try:
+        comp_model = model_manager.get_component_model()
+        comp_ready = True
+    except Exception as ex:
+        comp_err_msg = str(ex)
+        logger.error(f"Failed to load Component Model: {ex}")
+
+    try:
+        defect_model = model_manager.get_defect_model(selected_template_stem)
+        def_ready = True
+    except Exception as ex:
+        def_err_msg = str(ex)
+        logger.error(f"Failed to load Defect Model for template {selected_template_stem}: {ex}")
+
+    # Display status
+    if comp_ready:
+        st.markdown("<span style='color:#10b981; font-weight:bold;'>✓ Component Detector Ready</span>", unsafe_allow_html=True)
     else:
-        st.markdown("<span style='color:#ef4444; font-weight:bold;'>Component Detector ✗ Missing</span>", unsafe_allow_html=True)
+        st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>✕ Component Detector Failed</span><br><small style='color:#ef4444;'>{comp_err_msg}</small>", unsafe_allow_html=True)
 
-    if def_exists:
-        st.markdown(f"<span style='color:#10b981; font-weight:bold;'>Defect Detector ✓ Ready</span> (`{selected_defect_model_lbl}`)", unsafe_allow_html=True)
+    if def_ready:
+        st.markdown(f"<span style='color:#10b981; font-weight:bold;'>✓ Circuit Defect Detector Ready</span> (`{selected_defect_model_name}`)", unsafe_allow_html=True)
     else:
-        st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>Defect Detector ✗ Missing</span> (`{selected_defect_model_lbl}`)", unsafe_allow_html=True)
-
-    if not comp_exists:
-        st.warning(f"⚠️ Component weights not found at '{comp_path_rel}'. Component detection will fallback to mock.")
-    if not def_exists:
-        st.warning(f"⚠️ Defect weights not found at '{def_path_rel}'. Defect checks will fallback to mock.")
+        st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>✕ Circuit Detector Failed</span> (`{selected_defect_model_name}`)<br><small style='color:#ef4444;'>{def_err_msg}</small>", unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("Simulation Options")
@@ -275,24 +268,119 @@ with st.sidebar:
 # Handle Reset Click
 if reset_clicked:
     st.session_state.workflow_status = STATE_IDLE
-    st.session_state.active_inspection_results = {}
-    st.session_state.original_image = None
-    st.session_state.detection_image = None
-    st.session_state.segmentation_image = None
+    st.session_state.comp_results = None
+    st.session_state.circ_results = None
     st.session_state.error_message = ""
+    st.session_state.last_comp_file_name = None
+    st.session_state.last_circ_file_name = None
     logger.info("Inspection system reset.")
     st.rerun()
 
 # Load Selected Template Profile
 template = template_manager.load_template(selected_template_stem)
-if template:
-    st.session_state.current_pcb_template = template
-else:
+if not template:
     st.error(f"Error loading template config for {selected_device_lbl}")
     st.stop()
+st.session_state.current_pcb_template = template
 
-# Handle Run Click
+# -----------------------------------------------------------------------------
+# MAIN DASHBOARD VIEW
+# -----------------------------------------------------------------------------
+st.title("🏭 Automated Optical Inspection Assembly Verification Console")
+st.caption(f"System: {config.get('dashboard.company_name')} | Status: CONNECTED")
+
+# PCB specifications layout
+with st.expander("🔍 Selected PCB Specifications & Component Footprint Map", expanded=True):
+    board_dims = template.get("board_dimensions", {})
+    w_mm = board_dims.get("width_mm", "N/A")
+    h_mm = board_dims.get("height_mm", "N/A")
+    critical_comps = [c["id"] for c in template.get("components", [])]
+    
+    col_meta1, col_meta2, col_meta3 = st.columns(3)
+    with col_meta1:
+        st.markdown(f"**Board Name:** `{template.get('board_name', 'Unknown PCB')}`")
+        st.markdown(f"**Physical Dimensions:** `{w_mm} mm × {h_mm} mm`")
+    with col_meta2:
+        st.markdown(f"**Critical Component Count:** `{len(critical_comps)}` expected")
+        st.markdown(f"**Inspection Standard:** `Euclidean mm Misalignment`")
+    with col_meta3:
+        st.markdown("**Mapped Components:**")
+        st.caption(", ".join(critical_comps))
+
+st.markdown("---")
+
+# -----------------------------------------------------------------------------
+# TWO IMAGE UPLOAD CARDS (SIDE BY SIDE)
+# -----------------------------------------------------------------------------
+st.subheader("Image Acquisition Panel")
+col_upload1, col_upload2 = st.columns(2)
+
+with col_upload1:
+    st.markdown("""
+    <div style="background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 10px; margin-bottom: 10px; font-weight: bold; color: #38bdf8;">
+        CARD 1: COMPONENT INSPECTION IMAGE
+    </div>
+    """, unsafe_allow_html=True)
+    comp_file = st.file_uploader(
+        "Upload component image", 
+        type=["png", "jpg", "jpeg"],
+        key="comp_uploader",
+        help="Image optimized for component presence and position validation."
+    )
+    
+    if comp_file:
+        if st.session_state.last_comp_file_name != comp_file.name:
+            st.session_state.comp_results = None
+            st.session_state.last_comp_file_name = comp_file.name
+            st.session_state.workflow_status = STATE_IDLE
+        st.success("✓ Image uploaded")
+        # Display small thumbnail
+        st.image(comp_file, width=150)
+    else:
+        if st.session_state.last_comp_file_name is not None:
+            st.session_state.comp_results = None
+            st.session_state.last_comp_file_name = None
+            st.session_state.workflow_status = STATE_IDLE
+        st.warning("⚠ Image not uploaded")
+
+with col_upload2:
+    st.markdown("""
+    <div style="background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 10px; margin-bottom: 10px; font-weight: bold; color: #38bdf8;">
+        CARD 2: CIRCUIT / DEFECT INSPECTION IMAGE
+    </div>
+    """, unsafe_allow_html=True)
+    circ_file = st.file_uploader(
+        "Upload circuit image", 
+        type=["png", "jpg", "jpeg"],
+        key="circ_uploader",
+        help="Image optimized for solder joint defects and trace fracture inspection."
+    )
+    
+    if circ_file:
+        if st.session_state.last_circ_file_name != circ_file.name:
+            st.session_state.circ_results = None
+            st.session_state.last_circ_file_name = circ_file.name
+            st.session_state.workflow_status = STATE_IDLE
+        st.success("✓ Image uploaded")
+        # Display small thumbnail
+        st.image(circ_file, width=150)
+    else:
+        if st.session_state.last_circ_file_name is not None:
+            st.session_state.circ_results = None
+            st.session_state.last_circ_file_name = None
+            st.session_state.workflow_status = STATE_IDLE
+        st.warning("⚠ Image not uploaded")
+
+st.markdown("---")
+
+# -----------------------------------------------------------------------------
+# INSPECTION EXECUTION TRIGGER
+# -----------------------------------------------------------------------------
 if run_clicked:
+    if not comp_file and not circ_file:
+        st.error("Please upload at least one image to run inspection.")
+        st.stop()
+        
     st.session_state.workflow_status = STATE_PROCESSING
     st.session_state.error_message = ""
     
@@ -302,294 +390,303 @@ if run_clicked:
     )
     if not val_ok:
         st.session_state.workflow_status = STATE_ERROR
-        st.session_state.error_message = f"Config Error: {val_msg}"
-        logger.error(st.session_state.error_message)
+        st.session_state.error_message = f"Slider Config Error: {val_msg}"
     else:
-        # Validate uploaded image if present
-        image_valid = True
-        if uploaded_file is not None:
-            meta_ok, meta_msg = ImageValidator.validate_file_metadata(
-                uploaded_file.name, uploaded_file.size
-            )
+        # Process Component Image if uploaded
+        if comp_file:
+            logger.info("Executing component inspection pipeline...")
+            meta_ok, meta_msg = ImageValidator.validate_file_metadata(comp_file.name, comp_file.size)
             if not meta_ok:
-                image_valid = False
                 st.session_state.workflow_status = STATE_ERROR
-                st.session_state.error_message = f"Image Metadata Error: {meta_msg}"
+                st.session_state.error_message = f"Component Image Error: {meta_msg}"
             else:
-                image_bytes = uploaded_file.read()
-                uploaded_file.seek(0)  # Reset pointer to start for downstream image loaders
-                sig_ok, sig_msg = ImageValidator.validate_image_bytes(image_bytes)
-                if not sig_ok:
-                    image_valid = False
-                    st.session_state.workflow_status = STATE_ERROR
-                    st.session_state.error_message = f"Image Header Error: {sig_msg}"
-        
-        if image_valid:
-            if uploaded_file is None:
-                st.session_state.workflow_status = STATE_ERROR
-                st.session_state.error_message = "Please upload a PCB image before running AOI."
-                logger.error(st.session_state.error_message)
-            else:
-                logger.info("Executing real component YOLO inference pipeline...")
-                progress_text = "Verifying physical alignments..."
-                my_bar = st.progress(0, text=progress_text)
-                for pct in range(100):
-                    time.sleep(0.005)
-                    my_bar.progress(pct + 1, text=progress_text)
-                my_bar.empty()
-
-                # Log model config details
-                comp_config = config.get("models.component_model")
-                defect_mapping = config.get("models.defect_mapping")
-                profile_config = defect_mapping.get(selected_template_stem, {}) if defect_mapping else {}
-                
-                if isinstance(comp_config, dict):
-                    comp_name = comp_config.get("name", "Component")
-                    comp_path = comp_config.get("path", "models/trained/component_detector_best.pt")
-                else:
-                    comp_name = "Component"
-                    comp_path = "models/trained/component_detector_best.pt"
-                    
-                if isinstance(profile_config, dict):
-                    def_name = profile_config.get("name", "None")
-                    def_path = profile_config.get("path", "None")
-                else:
-                    def_name = profile_config or "None"
-                    def_path = config.get(f"models.trained.{def_name}", "None")
-                
-                logger.info(f"PCB Profile: {selected_device_lbl}")
-                logger.info(f"Defect Model: {def_name}")
-                logger.info(f"Defect Model Path: {def_path}")
-                logger.info(f"Component Model: {comp_name}")
-                logger.info(f"Component Model Path: {comp_path}")
-
                 try:
-                    from src.ai.model_manager import ModelManager
-                    manager = ModelManager()
-                    
-                    try:
-                        component_model = manager.get_component_model()
-                    except FileNotFoundError as e:
-                        component_model = None
-                        logger.warning(f"Component model fallback activated: {e}")
-                        
-                    try:
-                        defect_model = manager.get_defect_model(selected_template_stem)
-                    except FileNotFoundError as e:
-                        defect_model = None
-                        logger.warning(f"Defect model fallback activated: {e}")
-                    
-                    # Run actual component detection and checker aggregation
-                    results = run_component_counting(
-                        uploaded_image=uploaded_file,
-                        component_model=component_model,
-                        defect_model=defect_model,
+                    comp_results = run_component_inspection(
+                        uploaded_image=comp_file,
+                        component_model=comp_model,
                         conf_slider=conf_threshold,
                         iou_slider=iou_threshold,
                         active_template=template,
-                        position_tolerance_slider=position_tolerance,
-                        defect_mode=defect_mode
+                        position_tolerance_slider=position_tolerance
                     )
-                    
-                    st.session_state.active_inspection_results = results
-                    st.session_state.original_image = results["original_image"]
-                    st.session_state.detection_image = results["annotated_image"]
-                    st.session_state.segmentation_image = results["segmentation_image"]
-                    st.session_state.workflow_status = STATE_COMPLETED
-                    
-                    logger.info(f"Inference complete. Status: {results['status']}")
+                    st.session_state.comp_results = comp_results
                 except Exception as ex:
                     st.session_state.workflow_status = STATE_ERROR
-                    st.session_state.error_message = f"Pipeline Crash: {ex}"
+                    st.session_state.error_message = f"Component Inspection Crash: {ex}"
                     logger.error(st.session_state.error_message, exc_info=True)
+        else:
+            st.session_state.comp_results = {
+                "status": "NOT_INSPECTED",
+                "reason": "Component image not uploaded"
+            }
+            
+        # Process Circuit Image if uploaded
+        if circ_file:
+            logger.info("Executing circuit defect inspection pipeline...")
+            meta_ok, meta_msg = ImageValidator.validate_file_metadata(circ_file.name, circ_file.size)
+            if not meta_ok:
+                st.session_state.workflow_status = STATE_ERROR
+                st.session_state.error_message = f"Circuit Image Error: {meta_msg}"
+            else:
+                try:
+                    # Provide matched detections to circuit inspection for simulated crack mappings
+                    temp_matched_dets = st.session_state.comp_results.get("detected_components", []) if st.session_state.comp_results else []
+                    circ_results = run_circuit_inspection(
+                        uploaded_image=circ_file,
+                        defect_model=defect_model,
+                        conf_slider=conf_threshold,
+                        iou_slider=iou_threshold,
+                        defect_mode=defect_mode,
+                        matched_detections=temp_matched_dets
+                    )
+                    st.session_state.circ_results = circ_results
+                except Exception as ex:
+                    st.session_state.workflow_status = STATE_ERROR
+                    st.session_state.error_message = f"Circuit Inspection Crash: {ex}"
+                    logger.error(st.session_state.error_message, exc_info=True)
+        else:
+            st.session_state.circ_results = {
+                "status": "NOT_INSPECTED",
+                "reason": "Circuit image not uploaded"
+            }
+            
+        if st.session_state.workflow_status != STATE_ERROR:
+            st.session_state.workflow_status = STATE_COMPLETED
 
 # -----------------------------------------------------------------------------
-# MAIN DASHBOARD VIEW
+# FINAL RESULTS & AGGREGATOR VIEW
 # -----------------------------------------------------------------------------
-st.title("🏭 Automated Optical Inspection Assembly Verification Console")
-st.caption(f"System: {config.get('dashboard.company_name')} | Status: CONNECTED")
-
-# Error message panel
 if st.session_state.workflow_status == STATE_ERROR:
     st.error(st.session_state.error_message)
 
-# Device Metadata Summary Panel
-with st.expander("🔍 Selected PCB Specifications & Component Footprint Map", expanded=True):
-    board_dims = template.get("board_dimensions", {})
-    w_mm = board_dims.get("width_mm", "N/A")
-    h_mm = board_dims.get("height_mm", "N/A")
-    critical_comps = [c["id"] for c in template.get("components", [])]
+if st.session_state.workflow_status == STATE_COMPLETED:
+    comp_res = st.session_state.comp_results
+    circ_res = st.session_state.circ_results
     
-    col_meta1, col_meta2, col_meta3 = st.columns(3)
-    with col_meta1:
-        st.markdown(f"**Board Name:** `{template.get('board_name', template.get('template_name', 'Unknown PCB'))}`")
-        st.markdown(f"**Physical Dimensions:** `{w_mm} mm × {h_mm} mm`")
-    with col_meta2:
-        st.markdown(f"**Critical Component Count:** `{len(critical_comps)}` expected")
-        st.markdown(f"**Inspection Standard:** `Euclidean mm Misalignment`")
-    with col_meta3:
-        st.markdown("**Mapped Components:**")
-        st.caption(", ".join(critical_comps))
-
-if st.session_state.workflow_status == STATE_IDLE:
-    st.info("System IDLE. Click 'Run AOI' to analyze the selected board.")
-
-# Completed Results Display
-if st.session_state.workflow_status in (STATE_COMPLETED, STATE_PROCESSING):
-    results = st.session_state.active_inspection_results
+    comp_status = comp_res.get("status") if comp_res else "NOT_INSPECTED"
+    circ_status = circ_res.get("status") if circ_res else "NOT_INSPECTED"
     
-    # 1. PASS/FAIL Badge Header
-    is_pass = results.get("status") == STATUS_PASS
-    if is_pass:
+    # 1. FINAL RESULT AGGREGATOR
+    st.subheader("Aggregated System Status")
+    
+    if comp_status == "PASS" and circ_status == "PASS":
         st.markdown("""
         <div style="background-color: #1e3a27; border: 2px solid #00FF66; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #00ff6633; margin-bottom: 20px;">
-            <span style="color: #00FF66; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🟢 ASSEMBLY PASSED (ZERO DEFECTS FLAGGED)</span>
+            <span style="color: #00FF66; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🟢 PCB INSPECTION PASSED</span><br>
+            <span style="color: #94a3b8; font-size: 13px;">Component Inspection: <b>PASS</b> | Circuit Inspection: <b>PASS</b></span>
         </div>
         """, unsafe_allow_html=True)
-    else:
+        
+    elif comp_status == "FAIL" and circ_status == "PASS":
         st.markdown("""
         <div style="background-color: #3f1e1e; border: 2px solid #FF3333; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #ff333333; margin-bottom: 20px;">
-            <span style="color: #FF3333; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🔴 ASSEMBLY FAILED (ANOMALIES IDENTIFIED)</span>
+            <span style="color: #FF3333; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🔴 COMPONENT DEFECT DETECTED</span><br>
+            <span style="color: #94a3b8; font-size: 13px;">Component Inspection: <b>FAIL</b> | Circuit Inspection: <b>PASS</b></span>
         </div>
         """, unsafe_allow_html=True)
-
-    # 2. Metric Cards
-    metrics = compute_dashboard_metrics(results)
-    m_cols = st.columns(5)
-    with m_cols[0]:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-val-neutral">{metrics['expected_count']}</div>
-            <div class="metric-lbl">Expected Components</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with m_cols[1]:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-val-pass">{metrics['correct_count']}</div>
-            <div class="metric-lbl">Correctly Placed</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with m_cols[2]:
-        val_color = "fail" if metrics['missing_count'] > 0 else "neutral"
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-val-{val_color}">{metrics['missing_count']}</div>
-            <div class="metric-lbl">Missing Components</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with m_cols[3]:
-        val_color = "fail" if metrics['anomaly_count'] > 0 else "neutral"
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-val-{val_color}">{metrics['anomaly_count']}</div>
-            <div class="metric-lbl">Anomalies Detected</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with m_cols[4]:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-val-neutral">{metrics['processing_time']}</div>
-            <div class="metric-lbl">Inspection Duration</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # 3. Diagnostic Views Columns
-    st.markdown("### Visual Inspection Columns")
-    col_img1, col_img2, col_img3 = st.columns(3)
-    with col_img1:
-        st.subheader("PCB Camera Feed")
-        if st.session_state.original_image:
-            st.image(st.session_state.original_image, use_container_width=True)
-    with col_img2:
-        st.subheader("Component Bounding Boxes")
-        if st.session_state.detection_image:
-            st.image(st.session_state.detection_image, use_container_width=True)
-    with col_img3:
-        st.subheader("Solder Joint Segmentation")
-        if st.session_state.segmentation_image:
-            st.image(st.session_state.segmentation_image, use_container_width=True)
-
-    # 4. Anomalies ledgers
-    st.markdown("### Verification Registers")
-    tab_census, tab_defects = st.tabs(["Component Census", "Discrepancy Detail Logs"])
-    
-    with tab_census:
-        st.subheader("Inventory Breakdown")
-        df_inventory = build_inventory_table(template, results.get("detected_counts", {}))
-        st.dataframe(df_inventory, use_container_width=True, hide_index=True)
-
-    with tab_defects:
-        st.subheader("Discrepancy Register Detail Log")
-        defect_rows = []
         
-        # Missing
-        for m in results.get("missing", []):
-            defect_rows.append({
-                "Category": "MISSING",
-                "Component ID": m["id"],
-                "Type": m["type"],
-                "Expected Coords (x, y)": f"({m['expected_x_pct']:.2f}, {m['expected_y_pct']:.2f})",
-                "Actual Coords (x, y)": "ABSENT",
-                "Details": m["reason"]
-            })
-        # Misaligned
-        for m in results.get("misaligned", []):
-            defect_rows.append({
-                "Category": "MISALIGNED",
-                "Component ID": m["id"],
-                "Type": m["type"],
-                "Expected Coords (x, y)": f"({m['expected_x_pct']:.2f}, {m['expected_y_pct']:.2f})",
-                "Actual Coords (x, y)": f"({m['actual_x_pct']:.2f}, {m['actual_y_pct']:.2f})",
-                "Details": f"Offset: {m['distance_mm']}mm (Limit: {m['tolerance_mm']}mm)"
-            })
-        # Cracks
-        for c in results.get("cracks", []):
-            defect_rows.append({
-                "Category": "SOLDER CRACK",
-                "Component ID": c["id"],
-                "Type": "Joint Outline",
-                "Expected Coords (x, y)": "N/A",
-                "Actual Coords (x, y)": f"({c['center_x_pct']:.2f}, {c['center_y_pct']:.2f})",
-                "Details": f"Fracture Severity: {c['severity']}"
-            })
-        # Extra
-        for e in results.get("extra", []):
-            defect_rows.append({
-                "Category": "EXTRA COMPONENT",
-                "Component ID": e["id"],
-                "Type": e["type"],
-                "Expected Coords (x, y)": "UNREGISTERED",
-                "Actual Coords (x, y)": f"({e['center_x_pct']:.2f}, {e['center_y_pct']:.2f})",
-                "Details": f"Placement Confidence: {e['confidence']*100:.1f}%"
-            })
+    elif comp_status == "PASS" and circ_status == "FAIL":
+        st.markdown("""
+        <div style="background-color: #3f1e1e; border: 2px solid #FF3333; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #ff333333; margin-bottom: 20px;">
+            <span style="color: #FF3333; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🔴 CIRCUIT DEFECT DETECTED</span><br>
+            <span style="color: #94a3b8; font-size: 13px;">Component Inspection: <b>PASS</b> | Circuit Inspection: <b>FAIL</b></span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    elif comp_status == "FAIL" and circ_status == "FAIL":
+        st.markdown("""
+        <div style="background-color: #3f1e1e; border: 2px solid #FF3333; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #ff333333; margin-bottom: 20px;">
+            <span style="color: #FF3333; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🔴 COMPONENT + CIRCUIT DEFECTS DETECTED</span><br>
+            <span style="color: #94a3b8; font-size: 13px;">Component Inspection: <b>FAIL</b> | Circuit Inspection: <b>FAIL</b></span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    else: # If either or both is NOT_INSPECTED
+        missing_reasons = []
+        if comp_status == "NOT_INSPECTED":
+            missing_reasons.append("Component image not uploaded")
+        if circ_status == "NOT_INSPECTED":
+            missing_reasons.append("Circuit/defect image not uploaded")
             
-        if defect_rows:
-            st.dataframe(pd.DataFrame(defect_rows), use_container_width=True, hide_index=True)
-        else:
-            st.success("Zero defect markers flagged in the active verification register.")
+        reason_str = " and ".join(missing_reasons)
+        st.markdown(f"""
+        <div style="background-color: #3b3a30; border: 2px solid #facc15; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #facc1533; margin-bottom: 20px;">
+            <span style="color: #facc15; font-size: 28px; font-weight: bold; letter-spacing: 2px;">⚠️ INSPECTION INCOMPLETE</span><br>
+            <span style="color: #e2e8f0; font-size: 14px; font-weight: bold;">{reason_str}.</span><br>
+            <span style="color: #94a3b8; font-size: 12px;">Component Inspection: <b>{comp_status}</b> | Circuit Inspection: <b>{circ_status}</b></span>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # 5. Report Generators
+    # 2. Inspection Status Cards
+    st.subheader("Independent Inspection Results")
+    col_card1, col_card2 = st.columns(2)
+    
+    with col_card1:
+        st.markdown("<div style='background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px;'>", unsafe_allow_html=True)
+        st.markdown("### COMPONENT INSPECTION")
+        if comp_status == "PASS":
+            st.markdown("<h2 style='color:#00FF66; margin-top:0;'>🟢 PASS</h2>", unsafe_allow_html=True)
+        elif comp_status == "FAIL":
+            st.markdown("<h2 style='color:#FF3333; margin-top:0;'>🔴 FAIL</h2>", unsafe_allow_html=True)
+        else:
+            st.markdown("<h2 style='color:#e2e8f0; margin-top:0;'>⚪ NOT INSPECTED</h2>", unsafe_allow_html=True)
+            st.caption(comp_res.get("reason", "Component image not uploaded"))
+            
+        if comp_status in ("PASS", "FAIL"):
+            stats = comp_res.get("component_statistics", {})
+            st.markdown(f"**Expected Count:** `{stats.get('total_expected', 0)}`")
+            st.markdown(f"**Detected Count:** `{stats.get('total_detected', 0)}`")
+            st.markdown(f"**Missing Count:** `{len(comp_res.get('missing', []))}`")
+            st.markdown(f"**Extra Count:** `{len(comp_res.get('extra', []))}`")
+            st.markdown(f"**Misplaced Count:** `{len(comp_res.get('misaligned', []))}`")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col_card2:
+        st.markdown("<div style='background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px;'>", unsafe_allow_html=True)
+        st.markdown("### CIRCUIT INSPECTION")
+        if circ_status == "PASS":
+            st.markdown("<h2 style='color:#00FF66; margin-top:0;'>🟢 PASS</h2>", unsafe_allow_html=True)
+        elif circ_status == "FAIL":
+            st.markdown("<h2 style='color:#FF3333; margin-top:0;'>🔴 FAIL</h2>", unsafe_allow_html=True)
+        else:
+            st.markdown("<h2 style='color:#e2e8f0; margin-top:0;'>⚪ NOT INSPECTED</h2>", unsafe_allow_html=True)
+            st.caption(circ_res.get("reason", "Circuit image not uploaded"))
+            
+        if circ_status in ("PASS", "FAIL"):
+            defects = circ_res.get("defects", [])
+            st.markdown(f"**Defects Detected:** `{len(defects)}`")
+            
+            solder_defects = len([d for d in defects if "crack" in d.get("class_name", "").lower() or "solder" in d.get("class_name", "").lower()])
+            trace_defects = len(defects) - solder_defects
+            st.markdown(f"**Solder Defects:** `{solder_defects}`")
+            st.markdown(f"**Trace Defects:** `{trace_defects}`")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # 3. Visual Inspection Area
+    st.markdown("### Visual Inspection Area")
+    
+    col_vis1, col_vis2 = st.columns(2)
+    
+    with col_vis1:
+        st.markdown("#### COMPONENT VISUALS")
+        if comp_status in ("PASS", "FAIL"):
+            tab_comp_orig, tab_comp_box = st.tabs(["Original Image", "Component Overlays"])
+            with tab_comp_orig:
+                st.image(comp_res["original_image"], use_container_width=True)
+            with tab_comp_box:
+                st.image(comp_res["annotated_image"], use_container_width=True)
+        else:
+            st.info("Component inspection not available.\nComponent image not uploaded.")
+            
+    with col_vis2:
+        st.markdown("#### CIRCUIT VISUALS")
+        if circ_status in ("PASS", "FAIL"):
+            tab_circ_orig, tab_circ_box = st.tabs(["Original Image", "Defect Overlays"])
+            with tab_circ_orig:
+                st.image(circ_res["original_image"], use_container_width=True)
+            with tab_circ_box:
+                st.image(circ_res["annotated_image"], use_container_width=True)
+        else:
+            st.info("Circuit inspection not available.\nCircuit image not uploaded.")
+
+    # 4. Verification Registers
+    st.markdown("### Verification Registers")
+    tab_comp_reg, tab_circ_reg = st.tabs(["COMPONENT CENSUS", "CIRCUIT DEFECT REGISTER"])
+    
+    with tab_comp_reg:
+        if comp_status in ("PASS", "FAIL"):
+            # Build Component Census Table
+            comp_rows = []
+            
+            # Map expected template component coordinates
+            expected_comps = template.get("components", [])
+            detected_by_id = {d["id"]: d for d in comp_res.get("detected_components", []) if d.get("status") != "Extra"}
+            
+            for ec in expected_comps:
+                dc = detected_by_id.get(ec["id"])
+                if dc:
+                    status = dc.get("status", "Correct")
+                    comp_rows.append({
+                        "Expected ID": ec["id"],
+                        "Type": ec["type"],
+                        "Status": "PASS" if status == "Correct" else "MISPLACED",
+                        "Expected Center (x%, y%)": f"({float(ec['center_x_pct'])*100.0:.2f}, {float(ec['center_y_pct'])*100.0:.2f})" if float(ec['center_x_pct']) <= 1.0 else f"({ec['center_x_pct']:.2f}, {ec['center_y_pct']:.2f})",
+                        "Actual Center (x%, y%)": f"({dc['center_x_pct']:.2f}, {dc['center_y_pct']:.2f})",
+                        "Misalignment / Details": f"{dc.get('distance_mm', 0.0):.2f} mm offset" if status == "Misaligned" else "OK"
+                    })
+                else:
+                    # Missing
+                    m_info = next((m for m in comp_res.get("missing", []) if m["id"] == ec["id"]), None)
+                    reason = m_info["reason"] if m_info else "Missing component"
+                    comp_rows.append({
+                        "Expected ID": ec["id"],
+                        "Type": ec["type"],
+                        "Status": "MISSING",
+                        "Expected Center (x%, y%)": f"({float(ec['center_x_pct'])*100.0:.2f}, {float(ec['center_y_pct'])*100.0:.2f})" if float(ec['center_x_pct']) <= 1.0 else f"({ec['center_x_pct']:.2f}, {ec['center_y_pct']:.2f})",
+                        "Actual Center (x%, y%)": "UNAVAILABLE",
+                        "Misalignment / Details": reason
+                    })
+            
+            # Extra components
+            for e in comp_res.get("extra", []):
+                comp_rows.append({
+                    "Expected ID": "UNAVAILABLE",
+                    "Type": e["type"],
+                    "Status": "EXTRA",
+                    "Expected Center (x%, y%)": "UNAVAILABLE",
+                    "Actual Center (x%, y%)": f"({e['center_x_pct']:.2f}, {e['center_y_pct']:.2f})",
+                    "Misalignment / Details": f"Unregistered component (Conf: {e['confidence']*100:.1f}%)"
+                })
+                
+            if comp_rows:
+                st.dataframe(pd.DataFrame(comp_rows), use_container_width=True, hide_index=True)
+            else:
+                st.success("No components registered.")
+        else:
+            st.info("Component census data not available. Image was not uploaded.")
+            
+    with tab_circ_reg:
+        if circ_status in ("PASS", "FAIL"):
+            # Build Circuit Defect Register Table
+            circ_rows = []
+            for d in circ_res.get("defects", []):
+                circ_rows.append({
+                    "Defect ID": d["id"],
+                    "Defect Type": d["class_name"],
+                    "Confidence": f"{d['confidence']*100:.1f}%",
+                    "Location (x%, y%)": f"({d['center_x_pct']:.2f}, {d['center_y_pct']:.2f})",
+                    "Bounding Box Size (w% x h%)": f"{d['width_pct']:.2f}% x {d['height_pct']:.2f}%",
+                    "Severity Status": d["severity"]
+                })
+                
+            if circ_rows:
+                st.dataframe(pd.DataFrame(circ_rows), use_container_width=True, hide_index=True)
+            else:
+                st.success("Zero defect markers flagged in the active verification register.")
+        else:
+            st.info("Circuit defect register not available. Image was not uploaded.")
+
+    # 5. Report Exporters
     st.markdown("### Export Logs and Reports")
     
-    # Export payload package (contains distances in mm, coordinates in percentages)
+    # Construct combined export payload
     export_payload = {
-        "status": results["status"],
+        "status": "FAIL" if (comp_status == "FAIL" or circ_status == "FAIL") else ("PASS" if comp_status == "PASS" and circ_status == "PASS" else "INCOMPLETE"),
         "inspection_date": Helper.get_current_timestamp(),
         "operator": operator_name,
-        "template_name": results["template_name"],
-        "processing_time": results["processing_time"],
-        "component_statistics": results["component_statistics"],
-        "missing": results["missing"],
-        "misaligned": results["misaligned"],
-        "cracks": results["cracks"],
-        "extra": results["extra"]
+        "template_name": template.get("board_name", selected_device_lbl),
+        "processing_time": comp_res.get("processing_time", "0.000 sec") if comp_status != "NOT_INSPECTED" else circ_res.get("processing_time", "0.000 sec"),
+        "component_statistics": comp_res.get("component_statistics", {"total_expected": len(template.get("components", [])), "total_detected": 0, "by_type": {}}) if comp_status != "NOT_INSPECTED" else {},
+        "missing": comp_res.get("missing", []) if comp_status != "NOT_INSPECTED" else [],
+        "misaligned": comp_res.get("misaligned", []) if comp_status != "NOT_INSPECTED" else [],
+        "cracks": circ_res.get("defects", []) if circ_status != "NOT_INSPECTED" else [],
+        "extra": comp_res.get("extra", []) if comp_status != "NOT_INSPECTED" else []
     }
     
     col_pdf, col_csv, col_json = st.columns(3)
     log_stamp = Helper.get_log_timestamp()
     
-    # PDF export call
+    # PDF export
     pdf_filename = f"report_{selected_template_stem}_{log_stamp}.pdf"
     pdf_path = report_dir / pdf_filename
     pdf_exporter = ReportExporterFactory.get_exporter("pdf")
@@ -608,7 +705,7 @@ if st.session_state.workflow_status in (STATE_COMPLETED, STATE_PROCESSING):
         else:
             st.button("📄 PDF Exporter Offline", disabled=True, use_container_width=True)
 
-    # CSV export call
+    # CSV export
     csv_filename = f"report_{selected_template_stem}_{log_stamp}.csv"
     csv_path = report_dir / csv_filename
     csv_exporter = ReportExporterFactory.get_exporter("csv")
@@ -627,7 +724,7 @@ if st.session_state.workflow_status in (STATE_COMPLETED, STATE_PROCESSING):
         else:
             st.button("📊 CSV Exporter Offline", disabled=True, use_container_width=True)
 
-    # JSON export call
+    # JSON export
     json_filename = f"report_{selected_template_stem}_{log_stamp}.json"
     json_path = report_dir / json_filename
     json_exporter = ReportExporterFactory.get_exporter("json")
@@ -646,9 +743,12 @@ if st.session_state.workflow_status in (STATE_COMPLETED, STATE_PROCESSING):
         else:
             st.button("💻 JSON Exporter Offline", disabled=True, use_container_width=True)
 
-    # 6. Render Inference Debug Console (when checkbox is enabled)
-    if debug_mode and "debug_info" in results:
+    # 6. Inference Debug Console
+    if debug_mode:
         st.markdown("---")
         st.markdown("### 🛠️ Inference Debug Console")
         with st.expander("Show Complete Backend & AI Model Trace Log", expanded=True):
-            st.json(results["debug_info"])
+            st.json({
+                "component_inspection_debug": comp_res.get("debug_info") if comp_res else "NOT RUN",
+                "circuit_inspection_debug": circ_res if circ_res else "NOT RUN"
+            })
