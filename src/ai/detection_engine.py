@@ -118,12 +118,13 @@ def match_detections_to_template(
     detections: List[Dict[str, Any]], 
     width_mm: float, 
     height_mm: float
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Spatially maps raw class-based detections to expected template component IDs.
     Matches nearest component of the same type.
     """
     matched_detections = []
+    matching_decisions = []
     
     # Group expected by component type
     expected_by_type = {}
@@ -152,10 +153,27 @@ def match_detections_to_template(
                 det_copy["status"] = "Extra"
                 matched_detections.append(det_copy)
                 extra_counter += 1
+                
+                # Record matching decision for extra
+                matching_decisions.append({
+                    "expected_id": "N/A",
+                    "detected_type": det["type"],
+                    "distance_mm": 999.0,
+                    "decision": "EXTRA",
+                    "reason": f"Detected extra/unregistered component of type '{det['type']}'"
+                })
             continue
             
         if not dets:
             # All expected of this type are missing (handled downstream by MissingChecker)
+            for exp in exps:
+                matching_decisions.append({
+                    "expected_id": exp["id"],
+                    "detected_type": "N/A",
+                    "distance_mm": 999.0,
+                    "decision": "MISSING",
+                    "reason": f"No detected component of type '{t}' available for matching"
+                })
             continue
             
         # Match using proximity distance matrix (greedy search)
@@ -189,6 +207,25 @@ def match_detections_to_template(
                 det["status"] = "Correct"
                 matched_detections.append(det)
                 
+                # Record matching decision
+                dist = row[best_det_idx]
+                matching_decisions.append({
+                    "expected_id": exp["id"],
+                    "detected_type": det["type"],
+                    "distance_mm": round(dist, 2),
+                    "decision": "MATCHED",
+                    "reason": f"Spatially paired with detected component of type '{det['type']}' at distance {dist:.2f} mm"
+                })
+            else:
+                # Expected component was not matched to any detection
+                matching_decisions.append({
+                    "expected_id": exp["id"],
+                    "detected_type": "N/A",
+                    "distance_mm": 999.0,
+                    "decision": "MISSING",
+                    "reason": f"No detected component of type '{t}' available for matching"
+                })
+                
         # Unassigned detections are extra/unregistered
         for det_idx, det in enumerate(dets):
             if det_idx not in assigned_dets:
@@ -198,7 +235,16 @@ def match_detections_to_template(
                 matched_detections.append(det_copy)
                 extra_counter += 1
                 
-    return matched_detections
+                # Record matching decision for extra
+                matching_decisions.append({
+                    "expected_id": "N/A",
+                    "detected_type": det["type"],
+                    "distance_mm": 999.0,
+                    "decision": "EXTRA",
+                    "reason": f"Detected extra/unregistered component of type '{det['type']}' at coordinates ({det['center_x_pct']:.2f}, {det['center_y_pct']:.2f})"
+                })
+                
+    return matched_detections, matching_decisions
 
 def run_component_counting(
     uploaded_image: Any, 
@@ -217,10 +263,20 @@ def run_component_counting(
     start_time = time.time()
     
     # 1. Load image and get dimensions
+    import numpy as np
+    filename = "PIL Image Object"
+    if hasattr(uploaded_image, "name"):
+        filename = uploaded_image.name
+    elif hasattr(uploaded_image, "filename"):
+        filename = uploaded_image.filename
+        
     if not isinstance(uploaded_image, Image.Image):
         img = Image.open(uploaded_image).convert("RGB")
     else:
         img = uploaded_image
+
+    img_np = np.array(img)
+    logger.info(f"[IMAGE UPLOAD] Received target image: Name='{filename}', Shape={img_np.shape}, Mode='{img.mode}', Dtype={img_np.dtype}")
 
     # Apply PCB perspective alignment warping
     try:
@@ -258,6 +314,7 @@ def run_component_counting(
         
     # 3. Model Inference
     raw_detections = []
+    raw_details = []
     if component_model is not None:
         try:
             logger.info(f"[INFERENCE]\nConfidence Threshold: {conf_slider}\nIoU Threshold: {iou_slider}\nModel: Component Detector")
@@ -268,6 +325,14 @@ def run_component_counting(
                 cls_id = int(box.cls[0])
                 conf = float(box.conf[0])
                 class_name = component_model.names.get(cls_id, f"Class {cls_id}")
+                
+                # Extract pixel coordinates
+                xyxy = box.xyxy[0].tolist()
+                x1, y1, x2, y2 = xyxy
+                xywh = box.xywh[0].tolist()
+                cx, cy, w_box, h_box = xywh
+                
+                logger.info(f"  [RAW DET] ClassID: {cls_id}, Name: '{class_name}', Conf: {conf:.4f}, BBox: [{x1:.1f}, {y1:.1f}, {x2:.1f}, {y2:.1f}], Center: ({cx:.1f}, {cy:.1f}), Size: {w_box:.1f}x{h_box:.1f}")
                 
                 # Apply class mapping
                 mapped_type = map_class_to_component_type(class_name)
@@ -284,13 +349,27 @@ def run_component_counting(
                     "height_pct": h_pct,
                     "confidence": round(conf, 2)
                 })
+                
+                raw_details.append({
+                    "class_id": cls_id,
+                    "class_name": class_name,
+                    "confidence": conf,
+                    "x1": x1,
+                    "y1": y1,
+                    "x2": x2,
+                    "y2": y2,
+                    "center_x": cx,
+                    "center_y": cy,
+                    "width": w_box,
+                    "height": h_box
+                })
         except Exception as e:
             logger.error(f"YOLO Component Inference failed: {e}")
     else:
         logger.warning("Component model is offline/None. Returning empty detections.")
         
     # 4. Spatially match detections to template expected layout
-    matched_detections = match_detections_to_template(expected_comps, raw_detections, width_mm, height_mm)
+    matched_detections, matching_decisions = match_detections_to_template(expected_comps, raw_detections, width_mm, height_mm)
     
     # 5. Run Verification Engine Checkers
     engine = InspectionEngine()
@@ -471,6 +550,53 @@ def run_component_counting(
     duration = time.time() - start_time
     processing_time_str = f"{duration:.3f} sec"
     
+    # Build dynamic debug info payload for Streamlit operator dashboard
+    import torch
+    cuda_avail = torch.cuda.is_available()
+    cuda_dev = torch.cuda.get_device_name(0) if cuda_avail else "N/A"
+    
+    debug_info = {
+        "model_path": getattr(component_model, "ckpt_path", "models/trained/Component/All_cercit_finetuned_best.pt") if component_model else "N/A",
+        "model_type": "YOLO Object Detector",
+        "device": str(getattr(component_model, "device", "cpu")) if component_model else "N/A",
+        "cuda_available": cuda_avail,
+        "cuda_device_name": cuda_dev,
+        "class_names": list(component_model.names.values()) if component_model else [],
+        "image_filename": filename,
+        "image_width": w,
+        "image_height": h,
+        "image_channels": img_np.shape[2] if len(img_np.shape) > 2 else 1,
+        "confidence_threshold": conf_slider,
+        "iou_threshold": iou_slider,
+        "raw_detections": raw_details,
+        "filtered_detections": [
+            {
+                "id": d.get("id", "N/A"),
+                "type": d.get("type", "Unknown"),
+                "center_x_pct": d.get("center_x_pct", 0.0),
+                "center_y_pct": d.get("center_y_pct", 0.0),
+                "status": d.get("status", "Unknown"),
+                "confidence": d.get("confidence", 0.0)
+            } for d in matched_detections
+        ],
+        "template": [
+            {
+                "id": c.get("id", "N/A"),
+                "type": c.get("type", "Unknown"),
+                "center_x_pct": c.get("center_x_pct", 0.0),
+                "center_y_pct": c.get("center_y_pct", 0.0)
+            } for c in expected_comps
+        ],
+        "matching": matching_decisions,
+        "final": {
+            "detected_count": len(matched_detections),
+            "placed_count": len([d for d in matched_detections if d.get("status") in ["Correct", "Misaligned"]]),
+            "missing_count": len(inspection_results["missing"]),
+            "extra_count": len(inspection_results["extra"]),
+            "anomaly_count": len(inspection_results["missing"]) + len(inspection_results["extra"]) + len(inspection_results["misaligned"]) + len(cracks)
+        }
+    }
+    
     return {
         "status": overall_status,
         "processing_time": processing_time_str,
@@ -488,7 +614,8 @@ def run_component_counting(
         "cracks": cracks,
         "annotated_image": annotated_image,
         "segmentation_image": segmentation_image,
-        "original_image": img
+        "original_image": img,
+        "debug_info": debug_info
     }
 
 def run_defect_detection(

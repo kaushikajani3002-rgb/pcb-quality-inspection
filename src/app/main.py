@@ -254,6 +254,12 @@ with st.sidebar:
         help="Toggles simulated inspection errors (missing, misaligned, cracks)."
     )
 
+    debug_mode = st.checkbox(
+        "Enable Inference Debug Mode", 
+        value=True,
+        help="Enables display of raw YOLO outputs, matching matrices, and hardware specs."
+    )
+
     operator_name = st.text_input(
         "Operator ID", 
         value=config.get("dashboard.default_operator", "Operator_AOI_04")
@@ -311,6 +317,7 @@ if run_clicked:
                 st.session_state.error_message = f"Image Metadata Error: {meta_msg}"
             else:
                 image_bytes = uploaded_file.read()
+                uploaded_file.seek(0)  # Reset pointer to start for downstream image loaders
                 sig_ok, sig_msg = ImageValidator.validate_image_bytes(image_bytes)
                 if not sig_ok:
                     image_valid = False
@@ -638,3 +645,10 @@ if st.session_state.workflow_status in (STATE_COMPLETED, STATE_PROCESSING):
                 )
         else:
             st.button("💻 JSON Exporter Offline", disabled=True, use_container_width=True)
+
+    # 6. Render Inference Debug Console (when checkbox is enabled)
+    if debug_mode and "debug_info" in results:
+        st.markdown("---")
+        st.markdown("### 🛠️ Inference Debug Console")
+        with st.expander("Show Complete Backend & AI Model Trace Log", expanded=True):
+            st.json(results["debug_info"])

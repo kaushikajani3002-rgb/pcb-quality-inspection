@@ -85,8 +85,25 @@ class ModelManager:
             raise FileNotFoundError(error_msg)
 
         try:
-            logger.info(f"Loading YOLO model '{name}' from disk: {resolved_path}")
+            import time
+            import torch
+            logger.info(f"MODEL LOAD START: Loading YOLO model '{name}' from disk: {resolved_path}")
+            start_time = time.time()
             model = YOLO(str(resolved_path))
+            end_time = time.time()
+            load_duration = end_time - start_time
+            
+            # Check device and CUDA availability
+            cuda_available = torch.cuda.is_available()
+            device_name = torch.cuda.get_device_name(0) if cuda_available else "N/A"
+            model_device = getattr(model, "device", "Unknown")
+            
+            logger.info(f"MODEL LOAD END: Successfully loaded '{name}' in {load_duration:.4f} seconds.")
+            logger.info(f"  - Device: {model_device}")
+            logger.info(f"  - CUDA Available: {cuda_available} (Device Name: {device_name})")
+            model_classes_count = len(model.names) if hasattr(model, "names") else 0
+            logger.info(f"  - Model Classes Count: {model_classes_count}")
+            
             cache[name] = model
             return model
         except Exception as e:

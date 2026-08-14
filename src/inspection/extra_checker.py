@@ -26,10 +26,14 @@ class ExtraChecker:
                 extra_components.append({
                     "id": d_id,
                     "type": d.get("type", "Unknown"),
-                    "center_x": d.get("center_x"),
-                    "center_y": d.get("center_y"),
-                    "width": d.get("width"),
-                    "height": d.get("height"),
+                    "center_x_pct": d.get("center_x_pct", 0.0),
+                    "center_y_pct": d.get("center_y_pct", 0.0),
+                    "width_pct": d.get("width_pct", 0.0),
+                    "height_pct": d.get("height_pct", 0.0),
+                    "center_x": d.get("center_x_pct", 0.0),
+                    "center_y": d.get("center_y_pct", 0.0),
+                    "width": d.get("width_pct", 0.0),
+                    "height": d.get("height_pct", 0.0),
                     "confidence": d.get("confidence", 0.0),
                     "reason": "Unregistered component ID or unexpected placement location"
                 })
