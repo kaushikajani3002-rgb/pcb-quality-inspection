@@ -2,60 +2,52 @@
 # This file tracks all trained model weights in the repository.
 
 models:
-  yolo11m:
-    path: "models/pretrained/yolo11m.pt"
-    purpose: "COCO pre-trained base weights (not fine-tuned for PCB)"
-    status: "base_weights"
-    version: "v0"
-
-  yolo26n:
-    path: "models/pretrained/yolo26n.pt"
-    purpose: "COCO pre-trained Nano weights (edge/fallback)"
-    status: "base_weights"
-    version: "v0"
-
-  component_detector_best:
-    path: "models/trained/component_detector_best.pt"
-    purpose: "PCB component detection (IC, LED, Resistor, Capacitor, Connector, Crystal, Fuse)"
+  component_detector:
+    name: "Component"
+    path: "models/trained/Component/All_cercit_finetuned_best.pt"
+    purpose: "PCB component detection (IC, LED, Resistor, Capacitor, Connector, Crystal, Fuse, etc.)"
     base_weights: "yolo11m.pt"
     training_script: "training/component_detection/train_component_yolo.py"
     dataset: "Master_PCB_Dataset"
     status: "trained"
     version: "v2.0"
 
-  component_detector_best_v1:
-    path: "models/trained/component_detector_best_v1.pt"
-    purpose: "PCB component detection backup model"
-    base_weights: "yolo11m.pt"
-    training_script: "training/component_detection/train_component_yolo.py"
-    dataset: "Master_PCB_Dataset"
+  deeppcb:
+    name: "DeepPCB"
+    path: "models/trained/DeepPCB/DeepPCB.pt"
+    purpose: "Trace defect detection for Arduino Uno and standard PCBs"
+    training_script: "training/defect_detection/finetune_defect_yolo.py"
+    dataset: "DeepPCB"
+    classes: [open, short, mousebite, spur, copper, pin_hole]
     status: "trained"
     version: "v1.0"
 
-  deeppcb:
-    path: "models/trained/deeppcb.pt"
-    purpose: "Trace defect detection"
-    training_script: "training/defect_detection/finetune_defect_yolo.py"
-    dataset: "DeepPCB"
-    classes: [Short, Open, MouseBite, Spur, SpuriousCopper]
-    status: "not_trained"
-
   dspcbsd:
-    path: "models/trained/dspcbsd.pt"
-    purpose: "9-class PCB defect segmentation"
+    name: "DsPCBSD+"
+    path: "models/trained/DsPCBSD+/DsPCBSD+.pt"
+    purpose: "9-class PCB defect detection and segmentation for ESP32 DevKit"
     training_script: "training/defect_detection/finetune_defect_yolo.py"
     dataset: "DsPCBSD+"
-    classes: [Short, Spur, SpuriousCopper, Open, MouseBite, HoleBreakout, ConductorScratch, ConductorForeignObject, BaseMaterialForeignObject]
-    status: "not_trained"
+    classes: [SH, SP, SC, OP, MB, HB, CS, CFO, BMFO]
+    status: "trained"
+    version: "v1.0"
 
   hripcb:
-    path: "models/trained/hripcb.pt"
-    purpose: "High-resolution PCB defect detection"
+    name: "HRIPCB"
+    path: "models/trained/HRIPCB/HRIPCB.pt"
+    purpose: "High-resolution PCB defect detection for STM32 Blue Pill"
+    training_script: "training/defect_detection/finetune_defect_yolo.py"
     dataset: "HRIPCB"
-    status: "not_trained"
+    classes: [missing_hole, mouse_bite, open_circuit, short, spur, spurious_copper]
+    status: "trained"
+    version: "v1.0"
 
   tddpcb:
-    path: "models/trained/tddpcb.pt"
-    purpose: "Aligned-board defect detection"
+    name: "TDD-PCB"
+    path: "models/trained/TDD-PCB/PDD-PCB-best.pt"
+    purpose: "Aligned-board defect detection for Generic PCB"
+    training_script: "training/defect_detection/finetune_defect_yolo.py"
     dataset: "TDD-PCB"
-    status: "not_trained"
+    classes: [missing_hole, mouse_bite, open_circuit, short, spur, spurious_copper]
+    status: "trained"
+    version: "v1.0"
