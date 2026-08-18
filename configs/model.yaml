@@ -4,7 +4,7 @@ models:
     yolo26n: models/pretrained/yolo26n.pt
   component_model:
     name: Component
-    path: models/trained/Component/All_cercit_finetuned_best.pt
+    path: models/trained/Component/Component_best.pt
   defect_mapping:
     arduino_uno:
       name: DeepPCB

@@ -10,7 +10,7 @@ from src.inspection.inspection_engine import InspectionEngine
 
 # Dictionary of model paths. Mapped to configs/model.yaml defaults.
 MODEL_PATHS = {
-    "Component": "models/trained/Component/All_cercit_finetuned_best.pt",
+    "Component": "models/trained/Component/Component_best.pt",
     "DeepPCB": "models/trained/DeepPCB/DeepPCB.pt",
     "DsPCBSD+": "models/trained/DsPCBSD+/DsPCBSD+.pt",
     "HRIPCB": "models/trained/HRIPCB/HRIPCB.pt",
@@ -22,29 +22,29 @@ CLASS_NAME_MAP = {}
 
 def map_class_to_component_type(class_name: str) -> str:
     """
-    Maps 58 YOLO component model class names (e.g. 'Capacitor 104J', 'IC 555')
-    to general component type strings corresponding to expected template categories ('IC', 'Resistor', 'Capacitor', 'LED', 'Connector').
+    Maps YOLO component model class names (e.g. 'Capacitor 104J', 'IC 555', 'pins', 'switch', 'potentiometer')
+    to general component type strings corresponding to expected template categories ('IC', 'Resistor', 'Capacitor', 'LED', 'Connector', 'VR', 'Diode', 'Transistor').
     """
-    name_lower = class_name.lower()
+    name_lower = class_name.lower().strip()
     if "resistor" in name_lower:
         return "Resistor"
     if "capacitor" in name_lower:
         return "Capacitor"
-    if "ic" in name_lower or "lm324n" in name_lower or "4017" in name_lower or "555" in name_lower or "l7805cv" in name_lower:
+    if "ic" in name_lower or "lm324n" in name_lower or "4017" in name_lower or "555" in name_lower or "l7805cv" in name_lower or "mcu" in name_lower or "microcontroller" in name_lower:
         return "IC"
     if "led" in name_lower:
         return "LED"
-    if "diode" in name_lower:
+    if "diode" in name_lower or "zener" in name_lower:
         return "Diode"
     if "transistor" in name_lower:
         return "Transistor"
-    if "pushbutton" in name_lower or "relay" in name_lower or "button" in name_lower or "jack" in name_lower or "port" in name_lower or "connector" in name_lower or "fuse" in name_lower or "crystal" in name_lower:
+    if any(k in name_lower for k in ["pushbutton", "relay", "button", "jack", "port", "connector", "fuse", "crystal", "switch", "pins", "pin", "header", "pad", "pads", "clock", "buzzer", "terminal", "battery", "display", "heatsink"]):
         return "Connector"
     if "transformer" in name_lower:
         return "Transformer"
-    if "vr" in name_lower:
+    if "vr" in name_lower or "potentiometer" in name_lower or "trimpot" in name_lower:
         return "VR"
-    return class_name
+    return class_name.capitalize()
 
 def load_model(model_name: str) -> Any:
     """
@@ -207,59 +207,38 @@ def match_detections_to_template(
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Spatially maps raw class-based detections to expected template component IDs.
-    Matches nearest component of the same type.
+    Matches nearest component of the same type, with fallback spatial proximity pairing.
     """
     matched_detections = []
     matching_decisions = []
     
-    # Group expected by component type
+    # Filter out any PCB board container detections
+    filtered_dets = [d for d in detections if str(d.get("type", "")).lower() != "pcb" and str(d.get("class_name", "")).lower() != "pcb"]
+    
+    # Group expected by standardized component type
     expected_by_type = {}
     for exp in expected_comps:
-        t = exp["type"]
+        t = str(exp["type"]).strip().upper()
         expected_by_type.setdefault(t, []).append(exp)
         
-    # Group detections by component type
+    # Group detections by standardized component type
     detections_by_type = {}
-    for det in detections:
-        t = det["type"]
+    for det in filtered_dets:
+        t = str(det["type"]).strip().upper()
         detections_by_type.setdefault(t, []).append(det)
         
     all_types = set(expected_by_type.keys()) | set(detections_by_type.keys())
     extra_counter = 1
     
+    assigned_exp_ids = set()
+    assigned_det_indices = set()
+
+    # Pass 1: Primary type-based spatial proximity matching
     for t in all_types:
         exps = expected_by_type.get(t, [])
         dets = detections_by_type.get(t, [])
         
-        if not exps:
-            # All detections of this type are extra/unregistered
-            for det in dets:
-                det_copy = det.copy()
-                det_copy["id"] = f"ERR_EXTRA_{t.upper()}_{extra_counter:02d}"
-                det_copy["status"] = "Extra"
-                matched_detections.append(det_copy)
-                extra_counter += 1
-                
-                # Record matching decision for extra
-                matching_decisions.append({
-                    "expected_id": "N/A",
-                    "detected_type": det["type"],
-                    "distance_mm": 999.0,
-                    "decision": "EXTRA",
-                    "reason": f"Detected extra/unregistered component of type '{det['type']}'"
-                })
-            continue
-            
-        if not dets:
-            # All expected of this type are missing (handled downstream by MissingChecker)
-            for exp in exps:
-                matching_decisions.append({
-                    "expected_id": exp["id"],
-                    "detected_type": "N/A",
-                    "distance_mm": 999.0,
-                    "decision": "MISSING",
-                    "reason": f"No detected component of type '{t}' available for matching"
-                })
+        if not exps or not dets:
             continue
             
         # Match using proximity distance matrix (greedy search)
@@ -275,26 +254,34 @@ def match_detections_to_template(
                 row.append(dist)
             dist_matrix.append(row)
             
-        assigned_dets = set()
         for exp_idx, exp in enumerate(exps):
             row = dist_matrix[exp_idx]
             sorted_det_indices = sorted(range(len(row)), key=lambda k: row[k])
             
             best_det_idx = None
             for idx in sorted_det_indices:
-                if idx not in assigned_dets:
-                    best_det_idx = idx
+                global_det = dets[idx]
+                # Identify global detection index in filtered_dets
+                g_idx = filtered_dets.index(global_det)
+                if g_idx not in assigned_det_indices:
+                    best_det_idx = g_idx
                     break
                     
             if best_det_idx is not None:
-                assigned_dets.add(best_det_idx)
-                det = dets[best_det_idx].copy()
+                assigned_det_indices.add(best_det_idx)
+                assigned_exp_ids.add(exp["id"])
+                
+                det = filtered_dets[best_det_idx].copy()
                 det["id"] = exp["id"]
+                det["expected_id"] = exp["id"]
+                det["expected_type"] = exp["type"]
                 det["status"] = "Correct"
                 matched_detections.append(det)
                 
-                # Record matching decision
-                dist = row[best_det_idx]
+                dist = math.sqrt(
+                    (((exp["center_x_pct"] / 100.0) * width_mm) - ((det["center_x_pct"] / 100.0) * width_mm)) ** 2 +
+                    (((exp["center_y_pct"] / 100.0) * height_mm) - ((det["center_y_pct"] / 100.0) * height_mm)) ** 2
+                )
                 matching_decisions.append({
                     "expected_id": exp["id"],
                     "detected_type": det["type"],
@@ -302,34 +289,79 @@ def match_detections_to_template(
                     "decision": "MATCHED",
                     "reason": f"Spatially paired with detected component of type '{det['type']}' at distance {dist:.2f} mm"
                 })
-            else:
-                # Expected component was not matched to any detection
+
+    # Pass 2: Fallback spatial proximity pairing for remaining unmatched expected components
+    unmatched_exps = [e for e in expected_comps if e["id"] not in assigned_exp_ids]
+    unmatched_det_indices = [i for i in range(len(filtered_dets)) if i not in assigned_det_indices]
+
+    if unmatched_exps and unmatched_det_indices:
+        for exp in unmatched_exps:
+            exp_x_mm = (exp["center_x_pct"] / 100.0) * width_mm
+            exp_y_mm = (exp["center_y_pct"] / 100.0) * height_mm
+            
+            best_det_idx = None
+            best_dist = 999.0
+            
+            for g_idx in unmatched_det_indices:
+                det = filtered_dets[g_idx]
+                det_x_mm = (det["center_x_pct"] / 100.0) * width_mm
+                det_y_mm = (det["center_y_pct"] / 100.0) * height_mm
+                dist = math.sqrt((exp_x_mm - det_x_mm) ** 2 + (exp_y_mm - det_y_mm) ** 2)
+                
+                # Proximity limit for spatial pairing across compatible categories (e.g. 15mm)
+                if dist < 15.0 and dist < best_dist:
+                    best_dist = dist
+                    best_det_idx = g_idx
+                    
+            if best_det_idx is not None:
+                assigned_det_indices.add(best_det_idx)
+                unmatched_det_indices.remove(best_det_idx)
+                assigned_exp_ids.add(exp["id"])
+                
+                det = filtered_dets[best_det_idx].copy()
+                det["id"] = exp["id"]
+                det["expected_id"] = exp["id"]
+                det["expected_type"] = exp["type"]
+                det["status"] = "Correct"
+                matched_detections.append(det)
+                
                 matching_decisions.append({
                     "expected_id": exp["id"],
-                    "detected_type": "N/A",
-                    "distance_mm": 999.0,
-                    "decision": "MISSING",
-                    "reason": f"No detected component of type '{t}' available for matching"
-                })
-                
-        # Unassigned detections are extra/unregistered
-        for det_idx, det in enumerate(dets):
-            if det_idx not in assigned_dets:
-                det_copy = det.copy()
-                det_copy["id"] = f"ERR_EXTRA_{t.upper()}_{extra_counter:02d}"
-                det_copy["status"] = "Extra"
-                matched_detections.append(det_copy)
-                extra_counter += 1
-                
-                # Record matching decision for extra
-                matching_decisions.append({
-                    "expected_id": "N/A",
                     "detected_type": det["type"],
-                    "distance_mm": 999.0,
-                    "decision": "EXTRA",
-                    "reason": f"Detected extra/unregistered component of type '{det['type']}' at coordinates ({det['center_x_pct']:.2f}, {det['center_y_pct']:.2f})"
+                    "distance_mm": round(best_dist, 2),
+                    "decision": "MATCHED_SPATIAL_FALLBACK",
+                    "reason": f"Spatially paired across compatible category with detected '{det['type']}' at distance {best_dist:.2f} mm"
                 })
-                
+
+    # Record missing decisions
+    for exp in expected_comps:
+        if exp["id"] not in assigned_exp_ids:
+            matching_decisions.append({
+                "expected_id": exp["id"],
+                "detected_type": "N/A",
+                "distance_mm": 999.0,
+                "decision": "MISSING",
+                "reason": f"No detected component of type '{exp['type']}' available for matching"
+            })
+
+    # Unassigned detections are extra/unregistered components
+    for g_idx in range(len(filtered_dets)):
+        if g_idx not in assigned_det_indices:
+            det_copy = filtered_dets[g_idx].copy()
+            det_copy["id"] = f"ERR_EXTRA_{str(det_copy['type']).upper()}_{extra_counter:02d}"
+            det_copy["expected_id"] = "N/A"
+            det_copy["status"] = "Extra"
+            matched_detections.append(det_copy)
+            extra_counter += 1
+            
+            matching_decisions.append({
+                "expected_id": "N/A",
+                "detected_type": det_copy["type"],
+                "distance_mm": 999.0,
+                "decision": "EXTRA",
+                "reason": f"Detected extra/unregistered component of type '{det_copy['type']}' at coordinates ({det_copy['center_x_pct']:.2f}, {det_copy['center_y_pct']:.2f})"
+            })
+            
     return matched_detections, matching_decisions
 
 def run_component_inspection(
@@ -383,206 +415,84 @@ def run_component_inspection(
     
     if component_model is not None:
         try:
-             # Pass 1: Run YOLO on original image to locate PCB board outline
-             logger.info(f"[COMP INSPECTION PASS 1] Locating PCB board boundary. Conf: {conf_slider}")
-             results_pass1 = component_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
-             boxes_pass1 = results_pass1[0].boxes
-             for box in boxes_pass1:
+             # Run component YOLO model inference directly on uploaded image
+             logger.info(f"[COMP INSPECTION INFERENCE] Conf: {conf_slider}, IoU: {iou_slider}")
+             results = component_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)
+             boxes = results[0].boxes
+             logger.info(f"[COMP INSPECTION RESULT] YOLO returned {len(boxes)} raw bounding box detections.")
+             
+             for idx, box in enumerate(boxes, start=1):
                  cls_id = int(box.cls[0])
+                 conf = float(box.conf[0])
                  class_name = component_model.names.get(cls_id, f"Class {cls_id}")
+                 
+                 # Exclude outer PCB container class if present in model
                  if "pcb" in class_name.lower():
-                     pcb_box = box.xyxy[0].tolist()
-                     logger.info(f"[ALIGNMENT] Found PCB board outline bounding box: {pcb_box}")
-                     break
+                     continue
                      
-             # If PCB board outline is found, crop and run Pass 2 on the normalized board
-             if pcb_box is not None:
-                 bx1, by1, bx2, by2 = pcb_box
-                 bw = bx2 - bx1
-                 bh = by2 - by1
+                 x1, y1, x2, y2 = box.xyxy[0].tolist()
+                 mapped_type = map_class_to_component_type(class_name)
                  
-                 # Crop and resize to template's pixel dimensions
-                 t_w = int(board_dims.get("pixel_width", 640))
-                 t_h = int(board_dims.get("pixel_height", 480))
-                 
-                 cropped_img = img.crop((bx1, by1, bx2, by2))
-                 normalized_img = cropped_img.resize((t_w, t_h), Image.Resampling.LANCZOS)
-                 
-                 # Pass 2: Run YOLO on the cropped, resized board image
-                 logger.info(f"[COMP INSPECTION PASS 2] Running component model on normalized board image.")
-                 results_pass2 = component_model.predict(source=normalized_img, conf=conf_slider, iou=iou_slider, imgsz=640)
-                 boxes_pass2 = results_pass2[0].boxes
-                 logger.info(f"[COMP INSPECTION PASS 2 RESULT] Detected {len(boxes_pass2)} components on cropped board.")
-                 
-                 # Append the PCB board itself to raw detections for visualization / reference
-                 pcb_det = normalize_component_coordinates({
-                     "class_id": 14,
-                     "class_name": "PCB",
-                     "type": "PCB",
-                     "confidence": 1.0,
-                     "x1": bx1,
-                     "y1": by1,
-                     "x2": bx2,
-                     "y2": by2
+                 raw_det = normalize_component_coordinates({
+                     "id": f"DET_{idx:02d}",
+                     "detection_id": f"DET_{idx:02d}",
+                     "class_id": cls_id,
+                     "class_name": class_name,
+                     "type": class_name,  # Use exact YOLO class_name for component inventory
+                     "mapped_type": mapped_type,
+                     "confidence": float(conf),
+                     "x1": x1,
+                     "y1": y1,
+                     "x2": x2,
+                     "y2": y2
                  }, w, h)
-                 raw_detections.append(pcb_det)
-                 raw_details.append(pcb_det)
                  
-                 # Map detected component coordinates back to the original image space
-                 for box in boxes_pass2:
-                     cls_id = int(box.cls[0])
-                     conf = float(box.conf[0])
-                     class_name = component_model.names.get(cls_id, f"Class {cls_id}")
-                     if "pcb" in class_name.lower():
-                         continue # skip redundant PCB board class inside the cropped board
-                         
-                     dx1_norm, dy1_norm, dx2_norm, dy2_norm = box.xyxy[0].tolist()
-                     
-                     # Inverse transform mapping back to original image space
-                     dx1_orig = bx1 + (dx1_norm / t_w) * bw
-                     dy1_orig = by1 + (dy1_norm / t_h) * bh
-                     dx2_orig = bx1 + (dx2_norm / t_w) * bw
-                     dy2_orig = by1 + (dy2_norm / t_h) * bh
-                     
-                     mapped_type = map_class_to_component_type(class_name)
-                     
-                     raw_det = normalize_component_coordinates({
-                         "class_id": cls_id,
-                         "class_name": class_name,
-                         "type": mapped_type,
-                         "confidence": float(conf),
-                         "x1": dx1_orig,
-                         "y1": dy1_orig,
-                         "x2": dx2_orig,
-                         "y2": dy2_orig
-                     }, w, h)
-                     
-                     raw_detections.append(raw_det)
-                     raw_details.append(raw_det)
-             else:
-                 # Fallback: Run directly on the original image
-                 logger.info("[ALIGNMENT] PCB outline not detected. Running inference on original image.")
-                 for box in boxes_pass1:
-                     cls_id = int(box.cls[0])
-                     conf = float(box.conf[0])
-                     class_name = component_model.names.get(cls_id, f"Class {cls_id}")
-                     
-                     xyxy = box.xyxy[0].tolist()
-                     x1, y1, x2, y2 = xyxy
-                     mapped_type = map_class_to_component_type(class_name)
-                     
-                     raw_det = normalize_component_coordinates({
-                         "class_id": cls_id,
-                         "class_name": class_name,
-                         "type": mapped_type,
-                         "confidence": float(conf),
-                         "x1": x1,
-                         "y1": y1,
-                         "x2": x2,
-                         "y2": y2
-                     }, w, h)
-                     
-                     raw_detections.append(raw_det)
-                     raw_details.append(raw_det)
+                 raw_detections.append(raw_det)
+                 raw_details.append(raw_det)
         except Exception as e:
              logger.error(f"YOLO Component Inference pipeline failed: {e}")
     else:
          logger.warning("Component model is offline/None. Returning empty detections.")
          
-    # 2b. Normalize expected template components (project onto detected PCB board box if available)
+    # Preserve backend verification logic in debug_info for future scope
     expected_comps = [normalize_component_coordinates(c, w, h, board_box=pcb_box) for c in raw_expected]
-        
-    # 4. Spatially match detections to template expected layout
     matched_detections, matching_decisions = match_detections_to_template(expected_comps, raw_detections, width_mm, height_mm)
-    
-    # 5. Run Verification Engine Checkers
     engine = InspectionEngine()
     inspection_results = engine.inspect_board(active_template, matched_detections, position_tolerance_slider, [])
     
-    # 6. Apply Alignment and Extra labels to detections list
-    misaligned_ids = {m["id"] for m in inspection_results["misaligned"]}
-    for det in matched_detections:
-        if det["id"] in misaligned_ids:
-            det["status"] = "Misaligned"
-            
-    # Calculate counts by type
+    valid_component_detections = raw_detections
+    
+    # Calculate Component Inventory counts by exact YOLO class name
     detected_counts = {}
-    for d in matched_detections:
-        if d.get("status") != "Extra" and str(d.get("type", "")).lower() != "pcb":
-            t = d["type"]
-            detected_counts[t] = detected_counts.get(t, 0) + 1
+    total_conf_sum = 0.0
+    for d in valid_component_detections:
+        c_name = d.get("class_name", d.get("type", "Unknown"))
+        detected_counts[c_name] = detected_counts.get(c_name, 0) + 1
+        total_conf_sum += float(d.get("confidence", 0.0))
             
-    # 7. Render Annotated Bounding Box Image (Detection View)
+    total_detected = len(valid_component_detections)
+    unique_types_count = len(detected_counts)
+    avg_confidence = (total_conf_sum / total_detected) if total_detected > 0 else 0.0
+            
+    # Render Annotated Bounding Box Image with Class Name + Confidence
     annotated_image = img.copy()
     draw = ImageDraw.Draw(annotated_image)
     
-    # Draw detections
-    for d in matched_detections:
-        # Prevent drawing PCB board outline itself as a component detection box
-        if str(d.get("type", "")).lower() == "pcb" or str(d.get("class_name", "")).lower() == "pcb":
-            continue
-            
-        cx = int(d["center_x"])
-        cy = int(d["center_y"])
-        cw = int(d["width"])
-        ch = int(d["height"])
-        left, top = cx - cw // 2, cy - ch // 2
-        right, bottom = cx + cw // 2, cy + ch // 2
+    for d in valid_component_detections:
+        left = int(d["x1"])
+        top = int(d["y1"])
+        right = int(d["x2"])
+        bottom = int(d["y2"])
         
-        status = d.get("status", "Correct")
-        if status == "Correct":
-            box_color = "#00FF66"  # Green
-        elif status == "Misaligned":
-            box_color = "#FFCC00"  # Yellow
-        elif status == "Extra":
-            box_color = "#E11D48"  # Pinkish-Red
-        elif status == "Crack Detected":
-            box_color = "#3399FF"  # Blue for crack
-        else:
-            box_color = "#FFFFFF"
-            
+        box_color = "#00FF66"  # Bright Green for YOLO Component Detections
         draw.rectangle([left, top, right, bottom], outline=box_color, width=3)
-        draw.text((left + 5, top + 5), f"{d['id']} ({d['confidence']:.2f})", fill=box_color)
-        
-        # Draw misalignment vectors
-        if status == "Misaligned":
-            exp_x_px = cx
-            exp_y_px = cy
-            for m in inspection_results["misaligned"]:
-                if m["id"] == d["id"]:
-                    exp_comp = next((e for e in expected_comps if e["id"] == d["id"]), None)
-                    if exp_comp:
-                        exp_x_px = int(exp_comp["center_x"])
-                        exp_y_px = int(exp_comp["center_y"])
-                    break
-            
-            draw.ellipse([exp_x_px - 4, exp_y_px - 4, exp_x_px + 4, exp_y_px + 4], fill="#00FF66")
-            draw.line([(exp_x_px, exp_y_px), (cx, cy)], fill="#FFCC00", width=2)
-            
-    # Draw Missing Component Crosshairs
-    for m in inspection_results["missing"]:
-        cx = int(m["expected_x"])
-        cy = int(m["expected_y"])
-        cw = int(m["width"])
-        ch = int(m["height"])
-        left, top = cx - cw // 2, cy - ch // 2
-        right, bottom = cx + cw // 2, cy + ch // 2
-        
-        draw.rectangle([left, top, right, bottom], outline="#FF3333", width=2)
-        draw.line([(left, top), (right, bottom)], fill="#FF3333", width=1)
-        draw.line([(left, bottom), (right, top)], fill="#FF3333", width=1)
-        draw.text((left + 5, top + 5), f"MISSING: {m['id']}", fill="#FF3333")
+        label_text = f"{d.get('class_name')} {d.get('confidence', 0.0):.2f}"
+        draw.text((left + 4, max(0, top - 12)), label_text, fill=box_color)
         
     duration = time.time() - start_time
     processing_time_str = f"{duration:.3f} sec"
     
-    # Check if component status is PASS or FAIL
-    has_anomalies = (
-        len(inspection_results["missing"]) > 0 or 
-        len(inspection_results["extra"]) > 0 or 
-        len(inspection_results["misaligned"]) > 0
-    )
-    status = "FAIL" if has_anomalies else "PASS"
+    status = "PASS"
     
     # Build debug info payload
     import torch
@@ -590,8 +500,8 @@ def run_component_inspection(
     cuda_dev = torch.cuda.get_device_name(0) if cuda_avail else "N/A"
     
     debug_info = {
-        "model_path": getattr(component_model, "ckpt_path", "models/trained/Component/All_cercit_finetuned_best.pt") if component_model else "N/A",
-        "model_type": "YOLO Object Detector",
+        "model_path": getattr(component_model, "ckpt_path", "models/trained/Component/Component_best.pt") if component_model else "N/A",
+        "model_type": "YOLO Component Detector",
         "device": str(getattr(component_model, "device", "cpu")) if component_model else "N/A",
         "cuda_available": cuda_avail,
         "cuda_device_name": cuda_dev,
@@ -602,32 +512,14 @@ def run_component_inspection(
         "image_channels": img_np.shape[2] if len(img_np.shape) > 2 else 1,
         "confidence_threshold": conf_slider,
         "iou_threshold": iou_slider,
-        "raw_detections": [d for d in raw_details if str(d.get("type", "")).lower() != "pcb"],
-        "filtered_detections": [
-            {
-                "id": d.get("id", "N/A"),
-                "type": d.get("type", "Unknown"),
-                "center_x_pct": d.get("center_x_pct", 0.0),
-                "center_y_pct": d.get("center_y_pct", 0.0),
-                "status": d.get("status", "Unknown"),
-                "confidence": d.get("confidence", 0.0)
-            } for d in matched_detections if str(d.get("type", "")).lower() != "pcb"
-        ],
-        "template": [
-            {
-                "id": c.get("id", "N/A"),
-                "type": c.get("type", "Unknown"),
-                "center_x_pct": c.get("center_x_pct", 0.0),
-                "center_y_pct": c.get("center_y_pct", 0.0)
-            } for c in expected_comps
-        ],
+        "raw_detections": valid_component_detections,
+        "filtered_detections": valid_component_detections,
+        "template": expected_comps,
         "matching": matching_decisions,
-        "final": {
-            "detected_count": len([d for d in matched_detections if str(d.get("type", "")).lower() != "pcb"]),
-            "placed_count": len([d for d in matched_detections if d.get("status") in ["Correct", "Misaligned"] and str(d.get("type", "")).lower() != "pcb"]),
-            "missing_count": len(inspection_results["missing"]),
-            "extra_count": len([e for e in inspection_results["extra"] if str(e.get("type", "")).lower() != "pcb"]),
-            "anomaly_count": len(inspection_results["missing"]) + len([e for e in inspection_results["extra"] if str(e.get("type", "")).lower() != "pcb"]) + len(inspection_results["misaligned"])
+        "future_scope_verification": {
+            "missing": inspection_results["missing"],
+            "extra": inspection_results["extra"],
+            "misaligned": inspection_results["misaligned"]
         }
     }
     
@@ -636,15 +528,18 @@ def run_component_inspection(
         "processing_time": processing_time_str,
         "template_name": active_template.get("board_name", "Unknown PCB"),
         "component_statistics": {
-            "total_expected": total_comps,
-            "total_detected": len([d for d in matched_detections if str(d.get("type", "")).lower() != "pcb"]),
-            "by_type": template_counts
+            "total_detected": total_detected,
+            "unique_types_count": unique_types_count,
+            "avg_confidence": avg_confidence,
+            "total_expected": len(raw_expected),
+            "by_type": detected_counts
         },
-        "detected_components": [d for d in matched_detections if str(d.get("type", "")).lower() != "pcb"],
+        "average_confidence": avg_confidence,
+        "detected_components": valid_component_detections,
         "detected_counts": detected_counts,
-        "missing": inspection_results["missing"],
-        "extra": [e for e in inspection_results["extra"] if str(e.get("type", "")).lower() != "pcb"],
-        "misaligned": inspection_results["misaligned"],
+        "missing": [],
+        "extra": [],
+        "misaligned": [],
         "annotated_image": annotated_image,
         "original_image": img,
         "debug_info": debug_info
@@ -828,11 +723,13 @@ def run_component_counting(
     )
     overall_status = "FAIL" if has_anomalies else "PASS"
     
-    debug_info = comp_res["debug_info"]
+    debug_info = comp_res.get("debug_info", {})
+    if "final" not in debug_info or not isinstance(debug_info["final"], dict):
+        debug_info["final"] = {}
     debug_info["final"]["anomaly_count"] = (
-        len(comp_res["missing"]) + 
-        len(comp_res["extra"]) + 
-        len(comp_res["misaligned"]) + 
+        len(comp_res.get("missing", [])) + 
+        len(comp_res.get("extra", [])) + 
+        len(comp_res.get("misaligned", [])) + 
         len(cracks)
     )
     

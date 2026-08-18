@@ -469,51 +469,54 @@ if st.session_state.workflow_status == STATE_COMPLETED:
     # 1. FINAL RESULT AGGREGATOR
     st.subheader("Aggregated System Status")
     
-    if comp_status == "PASS" and circ_status == "PASS":
+    # 1. FINAL RESULT AGGREGATOR
+    st.subheader("Aggregated System Status")
+    
+    if comp_status in ("PASS", "DETECTION_COMPLETE") and circ_status == "PASS":
         st.markdown("""
         <div style="background-color: #1e3a27; border: 2px solid #00FF66; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #00ff6633; margin-bottom: 20px;">
-            <span style="color: #00FF66; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🟢 PCB INSPECTION PASSED</span><br>
-            <span style="color: #94a3b8; font-size: 13px;">Component Inspection: <b>PASS</b> | Circuit Inspection: <b>PASS</b></span>
+            <span style="color: #00FF66; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🟢 COMPONENT DETECTION COMPLETE & CIRCUIT PASSED</span><br>
+            <span style="color: #94a3b8; font-size: 13px;">Component Detection: <b>COMPLETE</b> | Circuit Inspection: <b>PASS</b></span>
         </div>
         """, unsafe_allow_html=True)
         
-    elif comp_status == "FAIL" and circ_status == "PASS":
-        st.markdown("""
-        <div style="background-color: #3f1e1e; border: 2px solid #FF3333; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #ff333333; margin-bottom: 20px;">
-            <span style="color: #FF3333; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🔴 COMPONENT DEFECT DETECTED</span><br>
-            <span style="color: #94a3b8; font-size: 13px;">Component Inspection: <b>FAIL</b> | Circuit Inspection: <b>PASS</b></span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    elif comp_status == "PASS" and circ_status == "FAIL":
+    elif comp_status in ("PASS", "DETECTION_COMPLETE") and circ_status == "FAIL":
         st.markdown("""
         <div style="background-color: #3f1e1e; border: 2px solid #FF3333; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #ff333333; margin-bottom: 20px;">
             <span style="color: #FF3333; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🔴 CIRCUIT DEFECT DETECTED</span><br>
-            <span style="color: #94a3b8; font-size: 13px;">Component Inspection: <b>PASS</b> | Circuit Inspection: <b>FAIL</b></span>
+            <span style="color: #94a3b8; font-size: 13px;">Component Detection: <b>COMPLETE</b> | Circuit Inspection: <b>FAIL</b></span>
         </div>
         """, unsafe_allow_html=True)
         
-    elif comp_status == "FAIL" and circ_status == "FAIL":
+    elif comp_status in ("PASS", "DETECTION_COMPLETE") and circ_status == "NOT_INSPECTED":
+        st.markdown("""
+        <div style="background-color: #1e3a27; border: 2px solid #00FF66; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #00ff6633; margin-bottom: 20px;">
+            <span style="color: #00FF66; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🟢 COMPONENT DETECTION COMPLETE</span><br>
+            <span style="color: #94a3b8; font-size: 13px;">Component Detection: <b>COMPLETE</b> | Circuit Inspection: <b>NOT INSPECTED</b></span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    elif comp_status == "NOT_INSPECTED" and circ_status == "PASS":
+        st.markdown("""
+        <div style="background-color: #1e3a27; border: 2px solid #00FF66; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #00ff6633; margin-bottom: 20px;">
+            <span style="color: #00FF66; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🟢 CIRCUIT INSPECTION PASSED</span><br>
+            <span style="color: #94a3b8; font-size: 13px;">Component Detection: <b>NOT INSPECTED</b> | Circuit Inspection: <b>PASS</b></span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    elif comp_status == "NOT_INSPECTED" and circ_status == "FAIL":
         st.markdown("""
         <div style="background-color: #3f1e1e; border: 2px solid #FF3333; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #ff333333; margin-bottom: 20px;">
-            <span style="color: #FF3333; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🔴 COMPONENT + CIRCUIT DEFECTS DETECTED</span><br>
-            <span style="color: #94a3b8; font-size: 13px;">Component Inspection: <b>FAIL</b> | Circuit Inspection: <b>FAIL</b></span>
+            <span style="color: #FF3333; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🔴 CIRCUIT DEFECT DETECTED</span><br>
+            <span style="color: #94a3b8; font-size: 13px;">Component Detection: <b>NOT INSPECTED</b> | Circuit Inspection: <b>FAIL</b></span>
         </div>
         """, unsafe_allow_html=True)
         
-    else: # If either or both is NOT_INSPECTED
-        missing_reasons = []
-        if comp_status == "NOT_INSPECTED":
-            missing_reasons.append("Component image not uploaded")
-        if circ_status == "NOT_INSPECTED":
-            missing_reasons.append("Circuit/defect image not uploaded")
-            
-        reason_str = " and ".join(missing_reasons)
-        st.markdown(f"""
+    else: # Neither inspected
+        st.markdown("""
         <div style="background-color: #3b3a30; border: 2px solid #facc15; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #facc1533; margin-bottom: 20px;">
-            <span style="color: #facc15; font-size: 28px; font-weight: bold; letter-spacing: 2px;">⚠️ INSPECTION INCOMPLETE</span><br>
-            <span style="color: #e2e8f0; font-size: 14px; font-weight: bold;">{reason_str}.</span><br>
-            <span style="color: #94a3b8; font-size: 12px;">Component Inspection: <b>{comp_status}</b> | Circuit Inspection: <b>{circ_status}</b></span>
+            <span style="color: #facc15; font-size: 28px; font-weight: bold; letter-spacing: 2px;">⚠️ NO INSPECTION EXECUTED</span><br>
+            <span style="color: #e2e8f0; font-size: 14px; font-weight: bold;">Please upload an image to begin inspection.</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -524,21 +527,20 @@ if st.session_state.workflow_status == STATE_COMPLETED:
     with col_card1:
         st.markdown("<div style='background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px;'>", unsafe_allow_html=True)
         st.markdown("### COMPONENT INSPECTION")
-        if comp_status == "PASS":
-            st.markdown("<h2 style='color:#00FF66; margin-top:0;'>🟢 PASS</h2>", unsafe_allow_html=True)
-        elif comp_status == "FAIL":
-            st.markdown("<h2 style='color:#FF3333; margin-top:0;'>🔴 FAIL</h2>", unsafe_allow_html=True)
+        if comp_status in ("PASS", "DETECTION_COMPLETE"):
+            st.markdown("<h2 style='color:#00FF66; margin-top:0;'>🟢 DETECTION COMPLETE</h2>", unsafe_allow_html=True)
+            stats = comp_res.get("component_statistics", {})
+            total_detected = stats.get("total_detected", len(comp_res.get("detected_components", [])))
+            st.markdown(f"**Total Components Detected:** `{total_detected}`")
+            
+            detected_counts = comp_res.get("detected_counts", {})
+            if detected_counts:
+                st.markdown("**Component Types:**")
+                for cname, count in sorted(detected_counts.items(), key=lambda x: x[1], reverse=True):
+                    st.markdown(f"- **{cname}:** `{count}`")
         else:
             st.markdown("<h2 style='color:#e2e8f0; margin-top:0;'>⚪ NOT INSPECTED</h2>", unsafe_allow_html=True)
             st.caption(comp_res.get("reason", "Component image not uploaded"))
-            
-        if comp_status in ("PASS", "FAIL"):
-            stats = comp_res.get("component_statistics", {})
-            st.markdown(f"**Expected Count:** `{stats.get('total_expected', 0)}`")
-            st.markdown(f"**Detected Count:** `{stats.get('total_detected', 0)}`")
-            st.markdown(f"**Missing Count:** `{len(comp_res.get('missing', []))}`")
-            st.markdown(f"**Extra Count:** `{len(comp_res.get('extra', []))}`")
-            st.markdown(f"**Misplaced Count:** `{len(comp_res.get('misaligned', []))}`")
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_card2:
@@ -569,7 +571,7 @@ if st.session_state.workflow_status == STATE_COMPLETED:
     
     with col_vis1:
         st.markdown("#### COMPONENT VISUALS")
-        if comp_status in ("PASS", "FAIL"):
+        if comp_status in ("PASS", "DETECTION_COMPLETE"):
             tab_comp_orig, tab_comp_box = st.tabs(["Original Image", "Component Overlays"])
             with tab_comp_orig:
                 st.image(comp_res["original_image"], use_container_width=True)
@@ -591,59 +593,124 @@ if st.session_state.workflow_status == STATE_COMPLETED:
 
     # 4. Verification Registers
     st.markdown("### Verification Registers")
-    tab_comp_reg, tab_circ_reg = st.tabs(["COMPONENT CENSUS", "CIRCUIT DEFECT REGISTER"])
+    tab_comp_reg, tab_circ_reg = st.tabs(["COMPONENT INVENTORY", "CIRCUIT DEFECT REGISTER"])
     
-    with tab_comp_reg:
-        if comp_status in ("PASS", "FAIL"):
-            # Build Component Census Table
-            comp_rows = []
-            
-            # Map expected template component coordinates
-            expected_comps = template.get("components", [])
-            detected_by_id = {d["id"]: d for d in comp_res.get("detected_components", []) if d.get("status") != "Extra"}
-            
-            for ec in expected_comps:
-                dc = detected_by_id.get(ec["id"])
-                if dc:
-                    status = dc.get("status", "Correct")
-                    comp_rows.append({
-                        "Expected ID": ec["id"],
-                        "Type": ec["type"],
-                        "Status": "PASS" if status == "Correct" else "MISPLACED",
-                        "Expected Center (x%, y%)": f"({float(ec['center_x_pct'])*100.0:.2f}, {float(ec['center_y_pct'])*100.0:.2f})" if float(ec['center_x_pct']) <= 1.0 else f"({ec['center_x_pct']:.2f}, {ec['center_y_pct']:.2f})",
-                        "Actual Center (x%, y%)": f"({dc['center_x_pct']:.2f}, {dc['center_y_pct']:.2f})",
-                        "Misalignment / Details": f"{dc.get('distance_mm', 0.0):.2f} mm offset" if status == "Misaligned" else "OK"
-                    })
-                else:
-                    # Missing
-                    m_info = next((m for m in comp_res.get("missing", []) if m["id"] == ec["id"]), None)
-                    reason = m_info["reason"] if m_info else "Missing component"
-                    comp_rows.append({
-                        "Expected ID": ec["id"],
-                        "Type": ec["type"],
-                        "Status": "MISSING",
-                        "Expected Center (x%, y%)": f"({float(ec['center_x_pct'])*100.0:.2f}, {float(ec['center_y_pct'])*100.0:.2f})" if float(ec['center_x_pct']) <= 1.0 else f"({ec['center_x_pct']:.2f}, {ec['center_y_pct']:.2f})",
-                        "Actual Center (x%, y%)": "UNAVAILABLE",
-                        "Misalignment / Details": reason
-                    })
-            
-            # Extra components
-            for e in comp_res.get("extra", []):
-                comp_rows.append({
-                    "Expected ID": "UNAVAILABLE",
-                    "Type": e["type"],
-                    "Status": "EXTRA",
-                    "Expected Center (x%, y%)": "UNAVAILABLE",
-                    "Actual Center (x%, y%)": f"({e['center_x_pct']:.2f}, {e['center_y_pct']:.2f})",
-                    "Misalignment / Details": f"Unregistered component (Conf: {e['confidence']*100:.1f}%)"
-                })
-                
-            if comp_rows:
-                st.dataframe(pd.DataFrame(comp_rows), use_container_width=True, hide_index=True)
-            else:
-                st.success("No components registered.")
+    def format_class_name(raw_name: str) -> str:
+        if not raw_name:
+            return "Unknown"
+        s = str(raw_name).strip()
+        if s.lower() == "ic":
+            return "IC"
+        elif s.lower() == "led":
+            return "LED"
+        elif s.lower() == "pcb":
+            return "PCB"
         else:
-            st.info("Component census data not available. Image was not uploaded.")
+            return s.capitalize()
+
+    with tab_comp_reg:
+        if comp_status in ("PASS", "DETECTION_COMPLETE"):
+            detected_comps = comp_res.get("detected_components", [])
+            detected_counts = comp_res.get("detected_counts", {})
+            stats = comp_res.get("component_statistics", {})
+            
+            total_detected = len(detected_comps)
+            unique_types = len(detected_counts)
+            
+            total_conf_sum = sum(float(d.get("confidence", 0.0)) for d in detected_comps)
+            avg_conf_pct = (total_conf_sum / total_detected * 100.0) if total_detected > 0 else 0.0
+            
+            # --- TOP KPI METRICS ROW ---
+            st.markdown("""
+            <div style="background-color: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                <div style="color: #00FF66; font-size: 16px; font-weight: bold; margin-bottom: 12px; letter-spacing: 1px;">
+                    🟢 COMPONENT DETECTION COMPLETE
+                </div>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 150px; background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 12px; text-align: center;">
+                        <div style="color: #94a3b8; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Total Components</div>
+                        <div style="color: #00FF66; font-size: 28px; font-weight: bold; margin-top: 4px;">{}</div>
+                    </div>
+                    <div style="flex: 1; min-width: 150px; background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 12px; text-align: center;">
+                        <div style="color: #94a3b8; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Unique Types</div>
+                        <div style="color: #38bdf8; font-size: 28px; font-weight: bold; margin-top: 4px;">{}</div>
+                    </div>
+                    <div style="flex: 1; min-width: 150px; background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 12px; text-align: center;">
+                        <div style="color: #94a3b8; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Avg Confidence</div>
+                        <div style="color: #f87171; font-size: 28px; font-weight: bold; margin-top: 4px;">{:.1f}%</div>
+                    </div>
+                </div>
+                <div style="color: #64748b; font-size: 12px; margin-top: 10px; font-weight: 500;">
+                    {} components detected across {} component types (Avg. Conf: {:.1f}%)
+                </div>
+            </div>
+            """.format(total_detected, unique_types, avg_conf_pct, total_detected, unique_types, avg_conf_pct), unsafe_allow_html=True)
+            
+            # --- TWO COLUMN SPLIT: SUMMARY vs VISUALIZATION ---
+            col_inv_left, col_inv_right = st.columns([1, 1.3])
+            
+            with col_inv_left:
+                st.markdown("#### COMPONENT TYPE SUMMARY")
+                if detected_counts:
+                    summary_rows = []
+                    running_total = 0
+                    for ctype, count in sorted(detected_counts.items(), key=lambda x: x[1], reverse=True):
+                        summary_rows.append({
+                            "Component Type": format_class_name(ctype),
+                            "Count": count
+                        })
+                        running_total += count
+                    
+                    # Total row
+                    summary_rows.append({
+                        "Component Type": "TOTAL",
+                        "Count": running_total
+                    })
+                    
+                    # Consistency check verification
+                    if running_total != total_detected:
+                        st.warning(f"Discrepancy detected: Type sum ({running_total}) != Total detected ({total_detected})")
+                        
+                    st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+                else:
+                    st.info("No component types detected.")
+                    
+            with col_inv_right:
+                st.markdown("#### COMPONENT VISUALIZATION")
+                if "annotated_image" in comp_res:
+                    st.image(comp_res["annotated_image"], use_container_width=True, caption=f"Annotated PCB Component Overlays ({total_detected} Bounding Boxes)")
+                else:
+                    st.info("Visual overlay not available.")
+                    
+            # --- FULL WIDTH DETECTION DETAILS TABLE (SORTED BY CONFIDENCE DESCENDING) ---
+            st.markdown("---")
+            st.markdown("#### COMPONENT DETECTION DETAILS")
+            if detected_comps:
+                # Sort detections by confidence descending for display
+                sorted_dets = sorted(detected_comps, key=lambda x: float(x.get("confidence", 0.0)), reverse=True)
+                details_rows = []
+                for i, d in enumerate(sorted_dets, start=1):
+                    details_rows.append({
+                        "#": i,
+                        "Component": format_class_name(d.get("class_name", d.get("type", "Unknown"))),
+                        "Class ID": d.get("class_id", "N/A"),
+                        "Confidence": f"{float(d.get('confidence', 0.0))*100.0:.1f}%",
+                        "X1": f"{float(d.get('x1', 0.0)):.1f}",
+                        "Y1": f"{float(d.get('y1', 0.0)):.1f}",
+                        "X2": f"{float(d.get('x2', 0.0)):.1f}",
+                        "Y2": f"{float(d.get('y2', 0.0)):.1f}",
+                        "Center (x%, y%)": f"({float(d.get('center_x_pct', 0.0)):.2f}%, {float(d.get('center_y_pct', 0.0)):.2f}%)"
+                    })
+                st.dataframe(pd.DataFrame(details_rows), use_container_width=True, hide_index=True)
+            else:
+                st.success("No components detected.")
+        else:
+            st.markdown("""
+            <div style="background-color: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 20px; text-align: center;">
+                <h3 style="color: #94a3b8; margin-top: 0;">⚪ NO COMPONENTS DETECTED / NOT INSPECTED</h3>
+                <p style="color: #64748b; font-size: 14px;">Please upload a PCB component image to generate component inventory.</p>
+            </div>
+            """, unsafe_allow_html=True)
             
     with tab_circ_reg:
         if circ_status in ("PASS", "FAIL"):

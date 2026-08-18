@@ -1,4 +1,4 @@
 inspection:
-  confidence: 0.5
+  confidence: 0.25
   iou: 0.45
   position_tolerance: 1.5

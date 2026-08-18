@@ -16,7 +16,7 @@ from src.ai.detection_engine import normalize_component_coordinates, map_class_t
 def main():
     image_path = r"D:\PCB\New folder\Arduino-uno.jpg"
     template_path = r"D:\PCB\PCB_AOI\templates\arduino_uno.json"
-    model_path = r"D:\PCB\PCB_AOI\models\trained\Component\All_cercit_finetuned_best.pt"
+    model_path = r"D:\PCB\PCB_AOI\models\trained\Component\Component_best.pt"
     
     if not os.path.exists(image_path):
         print(f"Image not found at: {image_path}")

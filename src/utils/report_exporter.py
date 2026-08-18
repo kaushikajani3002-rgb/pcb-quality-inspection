@@ -46,7 +46,7 @@ class JSONReportExporter(BaseReportExporter):
 
 class CSVReportExporter(BaseReportExporter):
     """
-    Concrete exporter writing flat CSV registers of all anomalies.
+    Concrete exporter writing flat CSV registers of all component detections and circuit defects.
     """
     def export(self, data: Dict[str, Any], target_path: Path) -> bool:
         try:
@@ -54,50 +54,36 @@ class CSVReportExporter(BaseReportExporter):
             with open(target_path, "w", newline="", encoding="utf-8") as file:
                 writer = csv.writer(file)
                 # Header row
-                writer.writerow(["Anomaly Type", "Component ID", "Type", "Expected Coords (Pct)", "Actual Coords (Pct)", "Details"])
+                writer.writerow(["Entry Type", "Detection ID", "Component Class", "Class ID", "Confidence", "X1", "Y1", "X2", "Y2", "Center (x%, y%)"])
                 
-                # Write Missing Components
-                for m in data.get("missing", []):
+                # Write Component Detections
+                for idx, d in enumerate(data.get("detected_components", []), start=1):
                     writer.writerow([
-                        "Missing", 
-                        m.get("id"), 
-                        m.get("type"), 
-                        f"({m.get('expected_x_pct'):.2f}, {m.get('expected_y_pct'):.2f})", 
-                        "N/A", 
-                        m.get("reason", "")
-                    ])
-                
-                # Write Misaligned Components
-                for m in data.get("misaligned", []):
-                    writer.writerow([
-                        "Misaligned", 
-                        m.get("id"), 
-                        m.get("type"), 
-                        f"({m.get('expected_x_pct'):.2f}, {m.get('expected_y_pct'):.2f})", 
-                        f"({m.get('actual_x_pct'):.2f}, {m.get('actual_y_pct'):.2f})", 
-                        f"Distance: {m.get('distance_mm')}mm (Tol: {m.get('tolerance_mm')}mm)"
+                        "Component Detection", 
+                        d.get("detection_id", f"DET_{idx:02d}"), 
+                        d.get("class_name", d.get("type", "Unknown")), 
+                        d.get("class_id", "N/A"), 
+                        f"{d.get('confidence', 0.0)*100.0:.1f}%", 
+                        f"{d.get('x1', 0.0):.1f}", 
+                        f"{d.get('y1', 0.0):.1f}", 
+                        f"{d.get('x2', 0.0):.1f}", 
+                        f"{d.get('y2', 0.0):.1f}", 
+                        f"({d.get('center_x_pct', 0.0):.2f}%, {d.get('center_y_pct', 0.0):.2f}%)"
                     ])
 
-                # Write Cracks
-                for crk in data.get("cracks", []):
+                # Write Circuit Defects if present
+                for d in data.get("defects", []):
                     writer.writerow([
-                        "Solder Crack", 
-                        crk.get("id"), 
-                        "N/A", 
-                        "N/A", 
-                        f"({crk.get('center_x_pct'):.2f}, {crk.get('center_y_pct'):.2f})", 
-                        f"Severity: {crk.get('severity')}"
-                    ])
-
-                # Write Extra Components
-                for ext in data.get("extra", []):
-                    writer.writerow([
-                        "Extra Component", 
-                        ext.get("id"), 
-                        ext.get("type"), 
-                        "N/A", 
-                        f"({ext.get('center_x_pct'):.2f}, {ext.get('center_y_pct'):.2f})", 
-                        f"Confidence: {ext.get('confidence')}"
+                        "Circuit Defect", 
+                        d.get("id", "N/A"), 
+                        d.get("class_name", "N/A"), 
+                        d.get("class_id", "N/A"), 
+                        f"{d.get('confidence', 0.0)*100.0:.1f}%", 
+                        f"{d.get('x1', 0.0):.1f}", 
+                        f"{d.get('y1', 0.0):.1f}", 
+                        f"{d.get('x2', 0.0):.1f}", 
+                        f"{d.get('y2', 0.0):.1f}", 
+                        f"({d.get('center_x_pct', 0.0):.2f}%, {d.get('center_y_pct', 0.0):.2f}%)"
                     ])
             logger.info(f"CSV Report successfully exported to: {target_path}")
             return True
@@ -297,6 +283,75 @@ class PDFReportExporter(BaseReportExporter):
             return False
 
 
+class ExcelReportExporter(BaseReportExporter):
+    """
+    Concrete exporter generating structured multi-sheet Excel workbooks (.xlsx) for Component Inventory.
+    """
+    def export(self, data: Dict[str, Any], target_path: Path) -> bool:
+        try:
+            import pandas as pd
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Sheet 1: Summary Metadata
+            stats = data.get("component_statistics", {})
+            debug_info = data.get("debug_info", {})
+            dets = data.get("detected_components", [])
+            total_det = stats.get("total_detected", len(dets))
+            avg_conf = (sum(float(d.get("confidence", 0.0)) for d in dets) / total_det) if total_det > 0 else 0.0
+            from datetime import datetime
+
+            summary_data = [
+                {"Field": "PCB Profile", "Value": data.get("template_name", "Unknown PCB")},
+                {"Field": "Image File", "Value": data.get("image_filename", debug_info.get("image_filename", "N/A"))},
+                {"Field": "Inspection Date/Time", "Value": data.get("inspection_date", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))},
+                {"Field": "Model Used", "Value": debug_info.get("model_path", "Component YOLO Model")},
+                {"Field": "Total Detected Components", "Value": total_det},
+                {"Field": "Unique Component Types", "Value": stats.get("unique_types_count", len(data.get("detected_counts", {})))},
+                {"Field": "Average Confidence", "Value": f"{avg_conf*100.0:.1f}%"},
+                {"Field": "Confidence Threshold", "Value": debug_info.get("confidence_threshold", 0.5)},
+                {"Field": "IoU Threshold", "Value": debug_info.get("iou_threshold", 0.45)},
+                {"Field": "Device", "Value": debug_info.get("device", "N/A")}
+            ]
+            df_summary = pd.DataFrame(summary_data)
+            
+            # Sheet 2: Component Summary (Type vs Count)
+            counts = data.get("detected_counts", {})
+            summary_rows = [{"Component Type": ctype, "Count": cnt} for ctype, cnt in sorted(counts.items(), key=lambda x: x[1], reverse=True)]
+            df_comp_summary = pd.DataFrame(summary_rows) if summary_rows else pd.DataFrame(columns=["Component Type", "Count"])
+            
+            # Sheet 3: Detection Details
+            dets = data.get("detected_components", [])
+            img_name = data.get("image_filename", debug_info.get("image_filename", "N/A"))
+            detail_rows = []
+            for idx, d in enumerate(dets, start=1):
+                detail_rows.append({
+                    "#": idx,
+                    "Image": img_name,
+                    "Component Type": d.get("type", d.get("class_name", "Unknown")),
+                    "Class ID": d.get("class_id", "N/A"),
+                    "Confidence": round(float(d.get("confidence", 0.0)), 4),
+                    "X1": round(float(d.get("x1", 0.0)), 1),
+                    "Y1": round(float(d.get("y1", 0.0)), 1),
+                    "X2": round(float(d.get("x2", 0.0)), 1),
+                    "Y2": round(float(d.get("y2", 0.0)), 1),
+                    "Center X (Pct)": round(float(d.get("center_x_pct", 0.0)), 2),
+                    "Center Y (Pct)": round(float(d.get("center_y_pct", 0.0)), 2)
+                })
+            df_details = pd.DataFrame(detail_rows) if detail_rows else pd.DataFrame(columns=["#", "Image", "Component Type", "Class ID", "Confidence", "X1", "Y1", "X2", "Y2", "Center X (Pct)", "Center Y (Pct)"])
+            
+            # Write multi-sheet Excel file using Pandas ExcelWriter
+            with pd.ExcelWriter(str(target_path), engine="openpyxl") as writer:
+                df_summary.to_excel(writer, sheet_name="Summary", index=False)
+                df_comp_summary.to_excel(writer, sheet_name="Component Summary", index=False)
+                df_details.to_excel(writer, sheet_name="Detection Details", index=False)
+                
+            logger.info(f"Excel Report successfully exported to: {target_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to export Excel report: {e}")
+            return False
+
+
 class ReportExporterFactory:
     """
     Factory to resolve the appropriate exporter based on requested target path suffix.
@@ -308,7 +363,10 @@ class ReportExporterFactory:
             return JSONReportExporter()
         elif clean_suffix == "csv":
             return CSVReportExporter()
+        elif clean_suffix in ("xlsx", "excel", "xls"):
+            return ExcelReportExporter()
         elif clean_suffix == "pdf":
             return PDFReportExporter()
         else:
             raise ValueError(f"No exporter implementation mapped for format suffix: '{format_suffix}'")
+

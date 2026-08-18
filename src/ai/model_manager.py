@@ -77,12 +77,19 @@ class ModelManager:
             logger.info(f"Reusing cached YOLO model '{name}' for {context}")
             return cache[name]
 
-        # Resolve path
+        # Resolve path (support relative project path or absolute fallback path)
         resolved_path = self.config.project_root / path_rel
         if not resolved_path.exists():
-            error_msg = f"Model '{name}' not found for context '{context}'. Expected weights file at: {resolved_path}"
-            logger.error(error_msg)
-            raise FileNotFoundError(error_msg)
+            abs_path = Path(path_rel)
+            fallback_dataset_path = Path(r"D:\PCB\Dataset\Component_best.pt")
+            if abs_path.exists():
+                resolved_path = abs_path
+            elif fallback_dataset_path.exists() and name.lower() == "component":
+                resolved_path = fallback_dataset_path
+            else:
+                error_msg = f"Model '{name}' not found for context '{context}'. Expected weights file at: {resolved_path}"
+                logger.error(error_msg)
+                raise FileNotFoundError(error_msg)
 
         try:
             import time
