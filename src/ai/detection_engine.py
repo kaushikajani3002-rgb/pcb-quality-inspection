@@ -10,11 +10,11 @@ from src.inspection.inspection_engine import InspectionEngine
 
 # Dictionary of model paths. Mapped to configs/model.yaml defaults.
 MODEL_PATHS = {
-    "Component": "models/trained/Component/All_cercit_finetuned_best.pt",
-    "DeepPCB": "models/trained/DeepPCB/DeepPCB.pt",
-    "DsPCBSD+": "models/trained/DsPCBSD+/DsPCBSD+.pt",
-    "HRIPCB": "models/trained/HRIPCB/HRIPCB.pt",
-    "TDD-PCB": "models/trained/TDD-PCB/PDD-PCB-best.pt"
+    "Component": "models/trained/component_detector_best.pt",
+    "DeepPCB": "models/trained/DeepPCB/best.pt",
+    "DsPCBSD+": "models/trained/DsPCBSD+/best.pt",
+    "HRIPCB": "models/trained/HRIPCB/best.pt",
+    "TDD-PCB": "models/trained/TDD-PCB/best.pt"
 }
 
 # Trained class names to template component type strings mapping
@@ -590,7 +590,7 @@ def run_component_inspection(
     cuda_dev = torch.cuda.get_device_name(0) if cuda_avail else "N/A"
     
     debug_info = {
-        "model_path": getattr(component_model, "ckpt_path", "models/trained/Component/All_cercit_finetuned_best.pt") if component_model else "N/A",
+        "model_path": getattr(component_model, "ckpt_path", "models/trained/component_detector_best.pt") if component_model else "N/A",
         "model_type": "YOLO Object Detector",
         "device": str(getattr(component_model, "device", "cpu")) if component_model else "N/A",
         "cuda_available": cuda_avail,
