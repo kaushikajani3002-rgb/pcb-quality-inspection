@@ -8,13 +8,13 @@ models:
   defect_mapping:
     arduino_uno:
       name: DeepPCB
-      path: models/trained/DeepPCB/DeepPCB.pt
+      path: models/trained/DeepPCB/best.pt
     esp32_devkit:
       name: DsPCBSD+
-      path: models/trained/DsPCBSD+/DsPCBSD+.pt
+      path: models/trained/DsPCBSD+/best.pt
     stm32_blue_pill:
       name: HRIPCB
-      path: models/trained/HRIPCB/HRIPCB.pt
+      path: models/trained/HRIPCB/best.pt
     generic_pcb:
       name: TDD-PCB
-      path: models/trained/TDD-PCB/PDD-PCB-best.pt
+      path: models/trained/TDD-PCB/best.pt

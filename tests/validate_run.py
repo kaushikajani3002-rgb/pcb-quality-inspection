@@ -138,7 +138,7 @@ try:
     with patch('pathlib.Path.exists', return_value=True), \
          patch('src.ai.model_manager.YOLO') as mock_yolo:
         
-        mock_yolo.side_effect = lambda path: f"YOLO_Instance_{os.path.basename(path)}"
+        mock_yolo.side_effect = lambda path: f"YOLO_Instance_{path}"
         
         manager = ModelManager()
         # Reset any cached state

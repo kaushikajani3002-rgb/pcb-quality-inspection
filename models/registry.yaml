@@ -33,29 +33,29 @@ models:
     version: "v1.0"
 
   deeppcb:
-    path: "models/trained/deeppcb.pt"
+    path: "models/trained/DeepPCB/best.pt"
     purpose: "Trace defect detection"
     training_script: "training/defect_detection/finetune_defect_yolo.py"
     dataset: "DeepPCB"
     classes: [Short, Open, MouseBite, Spur, SpuriousCopper]
-    status: "not_trained"
+    status: "trained"
 
   dspcbsd:
-    path: "models/trained/dspcbsd.pt"
+    path: "models/trained/DsPCBSD+/best.pt"
     purpose: "9-class PCB defect segmentation"
     training_script: "training/defect_detection/finetune_defect_yolo.py"
     dataset: "DsPCBSD+"
     classes: [Short, Spur, SpuriousCopper, Open, MouseBite, HoleBreakout, ConductorScratch, ConductorForeignObject, BaseMaterialForeignObject]
-    status: "not_trained"
+    status: "trained"
 
   hripcb:
-    path: "models/trained/hripcb.pt"
+    path: "models/trained/HRIPCB/best.pt"
     purpose: "High-resolution PCB defect detection"
     dataset: "HRIPCB"
-    status: "not_trained"
+    status: "trained"
 
   tddpcb:
-    path: "models/trained/tddpcb.pt"
+    path: "models/trained/TDD-PCB/best.pt"
     purpose: "Aligned-board defect detection"
     dataset: "TDD-PCB"
-    status: "not_trained"
+    status: "trained"
