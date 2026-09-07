@@ -52,7 +52,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS Injector for Clean Industrial UI & Visible Sidebar Controls
+# Custom CSS Injector for High-Visibility File Uploader & Industrial UI
 st.markdown("""
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -267,7 +267,7 @@ st.markdown("""
         color: #707881;
     }
 
-    /* File Uploader Container */
+    /* File Uploader Dropzone and Upload Button Styling (ALWAYS VISIBLE & CRISP) */
     [data-testid="stFileUploaderDropzone"] {
         background-color: #f2f3ff !important;
         border: 2px dashed #006194 !important;
@@ -277,6 +277,34 @@ st.markdown("""
     [data-testid="stFileUploaderDropzone"] * {
         color: #131b2e !important;
         font-weight: 600 !important;
+    }
+
+    [data-testid="stFileUploaderDropzone"] button,
+    [data-testid="stFileUploaderDropzone"] [data-testid="stBaseButton-secondary"],
+    [data-testid="stFileUploaderDropzone"] section button {
+        background-color: #006194 !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 6px !important;
+        padding: 6px 16px !important;
+        font-family: 'Space Grotesk', sans-serif !important;
+        font-weight: 700 !important;
+        opacity: 1 !important;
+        box-shadow: 0 2px 4px rgba(0, 97, 148, 0.2) !important;
+    }
+
+    [data-testid="stFileUploaderDropzone"] button *,
+    [data-testid="stFileUploaderDropzone"] [data-testid="stBaseButton-secondary"] *,
+    [data-testid="stFileUploaderDropzone"] section button * {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+    }
+
+    [data-testid="stFileUploaderDropzone"] button:hover,
+    [data-testid="stFileUploaderDropzone"] [data-testid="stBaseButton-secondary"]:hover,
+    [data-testid="stFileUploaderDropzone"] section button:hover {
+        background-color: #004b73 !important;
+        color: #ffffff !important;
     }
 
     /* Streamlit Button Custom Styling */
