@@ -59,9 +59,15 @@ st.markdown("""
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 
 <style>
-    /* HIDE DEFAULT STREAMLIT BLACK TOP BAR */
+    /* HIDE DEFAULT STREAMLIT BLACK TOP BAR & PADDING FIX */
     header[data-testid="stHeader"], [data-testid="stHeader"] {
         display: none !important;
+    }
+
+    .block-container, [data-testid="block-container"] {
+        padding-top: 0.5rem !important;
+        padding-bottom: 1rem !important;
+        max-width: 100% !important;
     }
 
     /* Industrial Theme Global Palette */
@@ -128,17 +134,21 @@ st.markdown("""
     .top-header-strip {
         background-color: #ffffff;
         border: 1px solid #bfc7d2;
-        padding: 12px 18px;
-        margin-bottom: 16px;
+        padding: 8px 16px;
+        margin-top: 0 !important;
+        margin-bottom: 12px !important;
         border-radius: 8px;
         box-shadow: 0 1px 3px rgba(19, 27, 46, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
 
     .pill-badge {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 4px 10px;
+        padding: 3px 8px;
         border-radius: 4px;
         font-family: 'JetBrains Mono', monospace;
         font-size: 11px;
@@ -325,7 +335,7 @@ output_dir.mkdir(parents=True, exist_ok=True)
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("""
-    <div style="background-color: #006194; border-radius: 6px; padding: 12px; margin-bottom: 14px; color: #ffffff;">
+    <div style="background-color: #006194; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; color: #ffffff;">
         <span style="font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700; color: #ffffff;">🔬 AOI OPTICAL INSPECTION</span><br>
         <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #cce5ff;">PCB Component & Defect Suite</span>
     </div>
@@ -435,20 +445,22 @@ h_mm = board_dims.get("height_mm", "53.4")
 critical_comps = [c["id"] for c in template.get("components", [])]
 
 # -----------------------------------------------------------------------------
-# TOP HEADER STRIP
+# SLEEK COMPACT TOP HEADER STRIP
 # -----------------------------------------------------------------------------
 st.markdown(f"""
 <div class="top-header-strip flex flex-wrap items-center justify-between gap-3">
-    <div style="display: flex; align-items: center; gap: 12px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
         <div style="width: 32px; height: 32px; background-color: #006194; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #ffffff; font-weight: bold; font-size: 16px;">🔬</div>
         <div>
-            <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700; margin: 0; text-transform: uppercase; color: #131b2e;">
+            <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; margin: 0; text-transform: uppercase; color: #131b2e; line-height: 1.2;">
                 AOI OPTICAL INSPECTION SUITE
             </h2>
-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #707881;">PCB Component Detection & Circuit Quality Verification Console</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #707881; display: block; margin-top: 2px;">
+                PCB Component Detection & Circuit Quality Verification Console
+            </span>
         </div>
     </div>
-    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
         <span class="pill-badge pill-secondary">CUDA GPU: READY (60 FPS)</span>
         <span class="pill-badge pill-primary">DEVICE: {selected_device_lbl}</span>
         <span class="pill-badge">DIM: {w_mm} × {h_mm} mm</span>
