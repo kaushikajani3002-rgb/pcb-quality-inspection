@@ -76,34 +76,47 @@ st.markdown("""
     }
 
     /* ALWAYS VISIBLE CRISP SIDEBAR TOGGLE BUTTON AT TOP-LEFT */
-    [data-testid="collapsedControl"], 
-    [data-testid="stSidebarCollapseButton"],
-    button[aria-label="Expand sidebar"],
-    button[aria-label="Collapse sidebar"],
-    button[data-testid="stHeaderCollapseButton"] {
-        color: #131b2e !important;
-        background-color: #ffffff !important;
-        border: 1px solid #bfc7d2 !important;
+    [data-testid="collapsedControl"] {
+        position: fixed !important;
+        top: 12px !important;
+        left: 14px !important;
+        z-index: 9999999 !important;
+        pointer-events: auto !important;
+        background-color: #006194 !important;
+        color: #ffffff !important;
+        border: 1px solid #004b73 !important;
         border-radius: 6px !important;
-        visibility: visible !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+        padding: 4px 8px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        z-index: 999999 !important;
-        pointer-events: auto !important;
-        box-shadow: 0 2px 5px rgba(19, 27, 46, 0.15) !important;
-        padding: 4px 8px !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        cursor: pointer !important;
     }
 
     [data-testid="collapsedControl"] svg,
-    [data-testid="stSidebarCollapseButton"] svg,
-    button[aria-label="Expand sidebar"] svg,
-    button[aria-label="Collapse sidebar"] svg {
+    [data-testid="collapsedControl"] span,
+    [data-testid="collapsedControl"] p {
+        fill: #ffffff !important;
+        color: #ffffff !important;
+        stroke: #ffffff !important;
+        width: 22px !important;
+        height: 22px !important;
+    }
+
+    [data-testid="stSidebarCollapseButton"] {
+        background-color: #f2f3ff !important;
+        color: #131b2e !important;
+        border: 1px solid #bfc7d2 !important;
+        border-radius: 6px !important;
+    }
+
+    [data-testid="stSidebarCollapseButton"] svg {
         fill: #131b2e !important;
         color: #131b2e !important;
         stroke: #131b2e !important;
-        width: 20px !important;
-        height: 20px !important;
     }
 
     .block-container, [data-testid="block-container"] {
