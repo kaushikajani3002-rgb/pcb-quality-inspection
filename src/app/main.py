@@ -43,7 +43,7 @@ from src.ai.detection_engine import (
 from src.ai.model_manager import ModelManager
 
 # -----------------------------------------------------------------------------
-# PAGE SETUP & STYLING (AOI Optical Inspection Suite Industrial Theme)
+# PAGE SETUP & STYLING (AOI Optical Inspection Suite High-Precision Theme)
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="AOI Optical Inspection Suite - SMT LINE 02",
@@ -52,7 +52,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS Injector for High-Precision AOI Theme Matching Mockup Exactly
+# Custom CSS Injector for Clean Industrial UI
 st.markdown("""
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -117,12 +117,12 @@ st.markdown("""
         font-family: 'JetBrains Mono', monospace !important;
     }
 
-    /* Top Industrial Strip */
+    /* Top Industrial Header Strip */
     .top-header-strip {
         background-color: #ffffff;
         border-bottom: 1px solid #bfc7d2;
         padding: 10px 16px;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
         border-radius: 6px;
         box-shadow: 0 1px 3px rgba(19, 27, 46, 0.05);
     }
@@ -171,7 +171,7 @@ st.markdown("""
 
     .aoi-card-header {
         font-family: 'Space Grotesk', sans-serif;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 700;
         text-transform: uppercase;
         color: #131b2e;
@@ -216,7 +216,7 @@ st.markdown("""
     
     .kpi-grid-val {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 22px;
+        font-size: 20px;
         font-weight: 700;
         color: #006194;
     }
@@ -333,7 +333,7 @@ output_dir.mkdir(parents=True, exist_ok=True)
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("""
-    <div style="background-color: #006194; border-radius: 6px; padding: 12px; text-align: left; margin-bottom: 12px; color: #ffffff;">
+    <div style="background-color: #006194; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; color: #ffffff;">
         <span style="font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 700; color: #ffffff;">🔬 AOI OPTICAL INSPECTION</span><br>
         <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #cce5ff;">SMT LINE 02 // CLEANROOM BAY 4</span>
     </div>
@@ -363,7 +363,6 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
 # Load Selected Template Profile
-template = template_manager.load_template(device_options.get(st.session_state.selected_template, "arduino_uno") if 'device_options' in locals() else "arduino_uno")
 selected_device_lbl = st.session_state.selected_template
 selected_template_stem = {
     "Arduino Uno": "arduino_uno",
@@ -418,13 +417,13 @@ st.markdown(f"""
         <div style="display: flex; align-items: center; gap: 8px;">
             <div style="width: 28px; height: 28px; background-color: #006194; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #ffffff; font-weight: bold;">🔬</div>
             <div>
-                <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; margin: 0; text-transform: uppercase; color: #131b2e;">
+                <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700; margin: 0; text-transform: uppercase; color: #131b2e;">
                     AOI OPTICAL INSPECTION SUITE
                 </h2>
                 <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #707881;">SMT LINE 02 // CLEANROOM BAY 4</span>
             </div>
         </div>
-        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-left: 16px;">
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-left: 12px;">
             <span class="pill-badge pill-secondary">CUDA GPU: 60 FPS (12.8ms)</span>
             <span class="pill-badge pill-primary">Arduino Uno Rev3 [IPC-A-610G Class 3]</span>
             <span class="pill-badge">LOT: #B84-9021</span>
@@ -442,15 +441,15 @@ st.markdown(f"""
 if station_route == "🔍 Inspection Console":
     # Subheader Bar
     st.markdown(f"""
-    <div style="display: flex; align-items: center; justify-content: space-between; background-color: #ffffff; border: 1px solid #bfc7d2; border-radius: 6px; padding: 8px 14px; margin-bottom: 14px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="color: #ba1a1a; font-size: 12px;">🔴</span>
-            <span style="font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700;">AOI VERIFICATION CONSOLE <span style="color: #707881; font-weight: 400;">// SMT-AOI-04</span></span>
+    <div style="display: flex; align-items: center; justify-content: space-between; background-color: #ffffff; border: 1px solid #bfc7d2; border-radius: 6px; padding: 6px 12px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: #ba1a1a; font-size: 11px;">🔴</span>
+            <span style="font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 700;">AOI VERIFICATION CONSOLE <span style="color: #707881; font-weight: 400;">// SMT-AOI-04</span></span>
             <span class="pill-badge pill-primary">CUDA: 14.2ms (60 FPS)</span>
             <span class="pill-badge pill-secondary">YIELD: 97.8% [LOT #B84-9021]</span>
             <span class="pill-badge">LINE-02 SYNCED</span>
         </div>
-        <div style="display: flex; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+        <div style="display: flex; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px;">
             <span>DEVICE: <b>{selected_device_lbl}</b></span>
             <span>DIM: <b>{w_mm} × {h_mm} mm</b></span>
             <span>PARTS: <b>{len(critical_comps)} Nom</b></span>
@@ -492,7 +491,7 @@ if station_route == "🔍 Inspection Console":
         iou_threshold = st.slider("IoU Overlap Gate", min_value=0.0, max_value=1.0, value=float(config.get("inspection.iou", 0.45)), step=0.05)
         position_tolerance = st.slider("Positional Tolerance (mm)", min_value=0.2, max_value=5.0, value=float(config.get("inspection.position_tolerance", 1.5)), step=0.1)
 
-        st.markdown("<div style='font-family: JetBrains Mono; font-size: 10px; font-weight: 700; color: #707881; margin-top: 8px;'>INFERENCE ENGINES</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-family: JetBrains Mono; font-size: 10px; font-weight: 700; color: #707881; margin-top: 6px;'>INFERENCE ENGINES</div>", unsafe_allow_html=True)
         st.markdown(f"""
         <div style="display: flex; justify-content: space-between; margin-top: 4px;">
             <span class="badge-ready">YOLOv11-Edge [Parts] READY</span>
@@ -543,7 +542,7 @@ if station_route == "🔍 Inspection Console":
     # COLUMN 2: SPATIAL RETICLE INSPECTION STAGE (CENTER CANVAS)
     # -------------------------------------------------------------------------
     with col_center:
-        st.markdown("<div class='aoi-card' style='min-height: 700px;'>", unsafe_allow_html=True)
+        st.markdown("<div class='aoi-card' style='min-height: 650px;'>", unsafe_allow_html=True)
         st.markdown("""
         <div class="aoi-card-header">
             <span>🎯 SPATIAL RETICLE INSPECTION STAGE</span>
@@ -607,7 +606,7 @@ if station_route == "🔍 Inspection Console":
             st.info("Awaiting acquisition image upload. Upload CH-01 or CH-02 to render spatial reticle stage.")
 
         st.markdown("""
-        <div style="background-color: #f2f3ff; border-radius: 4px; padding: 6px 10px; margin-top: 12px; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+        <div style="background-color: #f2f3ff; border-radius: 4px; padding: 6px 10px; margin-top: 10px; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
             <span>SCALE: 1.000px = 33.5μm // TELECENTRIC 1:1</span>
             <span>STAGE MOTOR: X:142.9 Y:88.4 Z:12.0</span>
         </div>
@@ -635,7 +634,7 @@ if station_route == "🔍 Inspection Console":
             st.markdown(f"""
             <div class="kpi-grid-card">
                 <div class="kpi-grid-lbl">COMPONENTS</div>
-                <div class="kpi-grid-val">{total_detected if total_detected > 0 else 45} <span style="font-size:12px; color:#707881;">/ 45 NOM</span></div>
+                <div class="kpi-grid-val">{total_detected if total_detected > 0 else 45} <span style="font-size:11px; color:#707881;">/ 45 NOM</span></div>
                 <div style="font-size:10px; color:#006c49; font-weight:bold;">100% Detected</div>
             </div>
             """, unsafe_allow_html=True)
@@ -643,12 +642,12 @@ if station_route == "🔍 Inspection Console":
             st.markdown(f"""
             <div class="kpi-grid-card">
                 <div class="kpi-grid-lbl">SMD / THT CLASSES</div>
-                <div class="kpi-grid-val" style="color:#006194;">{unique_types if unique_types > 0 else 9} <span style="font-size:12px; color:#707881;">TYPES</span></div>
+                <div class="kpi-grid-val" style="color:#006194;">{unique_types if unique_types > 0 else 9} <span style="font-size:11px; color:#707881;">TYPES</span></div>
                 <div style="font-size:10px; color:#707881;">QFP, DIP, Passives</div>
             </div>
             """, unsafe_allow_html=True)
 
-        st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 6px;'></div>", unsafe_allow_html=True)
         col_k3, col_k4 = st.columns(2)
         with col_k3:
             st.markdown(f"""
@@ -664,7 +663,7 @@ if station_route == "🔍 Inspection Console":
             st.markdown(f"""
             <div class="kpi-grid-card">
                 <div class="kpi-grid-lbl">VERDICT</div>
-                <div class="kpi-grid-val" style="color:{verdict_color}; font-size:16px;">{verdict_text}</div>
+                <div class="kpi-grid-val" style="color:{verdict_color}; font-size:15px;">{verdict_text}</div>
                 <div style="font-size:10px; color:{verdict_color}; font-weight:bold;">1x Solder Bridge</div>
             </div>
             """, unsafe_allow_html=True)
@@ -722,9 +721,9 @@ if station_route == "🔍 Inspection Console":
     # -------------------------------------------------------------------------
     # BOTTOM FOOTER BAR (EXPORTER & TELEMETRY)
     # -------------------------------------------------------------------------
-    st.markdown("<hr style='border: 0; border-top: 1px solid #bfc7d2; margin: 16px 0;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border: 0; border-top: 1px solid #bfc7d2; margin: 14px 0;'>", unsafe_allow_html=True)
     st.markdown("""
-    <div style="display: flex; justify-content: space-between; align-items: center; background-color: #ffffff; border: 1px solid #bfc7d2; border-radius: 6px; padding: 10px 16px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; background-color: #ffffff; border: 1px solid #bfc7d2; border-radius: 6px; padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
         <div>
             <span>HASH: <b>MD5: 9f8a3c8e7...e1</b></span> | 
             <span>OPERATOR: <b>#9942</b></span> | 
