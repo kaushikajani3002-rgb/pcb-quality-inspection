@@ -52,20 +52,41 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS Injector for Clean Industrial UI & Hiding Default Streamlit Header
+# Custom CSS Injector for Clean Industrial UI & Visible Sidebar Controls
 st.markdown("""
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 
 <style>
-    /* HIDE DEFAULT STREAMLIT BLACK TOP BAR & PADDING FIX */
-    header[data-testid="stHeader"], [data-testid="stHeader"] {
+    /* MAKE TRANSPARENT HEADER SO BLACK BAR IS GONE, BUT KEEP SIDEBAR EXPAND BUTTON VISIBLE */
+    header[data-testid="stHeader"] {
+        background-color: transparent !important;
+        height: 2.5rem !important;
+    }
+
+    #MainMenu, .stDeployButton, footer {
+        visibility: hidden !important;
         display: none !important;
     }
 
+    /* ALWAYS VISIBLE CRISP SIDEBAR TOGGLE BUTTON */
+    [data-testid="collapsedControl"], 
+    [data-testid="stSidebarCollapseButton"],
+    button[aria-label="Expand sidebar"],
+    button[aria-label="Collapse sidebar"] {
+        color: #131b2e !important;
+        background-color: #ffffff !important;
+        border: 1px solid #bfc7d2 !important;
+        border-radius: 6px !important;
+        visibility: visible !important;
+        display: flex !important;
+        z-index: 999999 !important;
+        box-shadow: 0 1px 3px rgba(19, 27, 46, 0.1) !important;
+    }
+
     .block-container, [data-testid="block-container"] {
-        padding-top: 0.5rem !important;
+        padding-top: 1rem !important;
         padding-bottom: 1rem !important;
         max-width: 100% !important;
     }
