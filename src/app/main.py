@@ -52,7 +52,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS Injector for High-Visibility File Uploader & Industrial UI
+# Custom CSS Injector for Clean Industrial UI & Full-Width Edge-to-Edge Top Header
 st.markdown("""
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -63,31 +63,54 @@ st.markdown("""
     header[data-testid="stHeader"] {
         background-color: transparent !important;
         height: 2.5rem !important;
+        z-index: 999990 !important;
+        pointer-events: none !important;
     }
 
-    #MainMenu, .stDeployButton, footer {
+    #MainMenu, .stDeployButton, [data-testid="stToolbar"], [data-testid="stHeaderActionElements"], footer {
         visibility: hidden !important;
         display: none !important;
+        opacity: 0 !important;
+        height: 0 !important;
+        width: 0 !important;
     }
 
-    /* ALWAYS VISIBLE CRISP SIDEBAR TOGGLE BUTTON */
+    /* ALWAYS VISIBLE CRISP SIDEBAR TOGGLE BUTTON AT TOP-LEFT */
     [data-testid="collapsedControl"], 
     [data-testid="stSidebarCollapseButton"],
     button[aria-label="Expand sidebar"],
-    button[aria-label="Collapse sidebar"] {
+    button[aria-label="Collapse sidebar"],
+    button[data-testid="stHeaderCollapseButton"] {
         color: #131b2e !important;
         background-color: #ffffff !important;
         border: 1px solid #bfc7d2 !important;
         border-radius: 6px !important;
         visibility: visible !important;
         display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
         z-index: 999999 !important;
-        box-shadow: 0 1px 3px rgba(19, 27, 46, 0.1) !important;
+        pointer-events: auto !important;
+        box-shadow: 0 2px 5px rgba(19, 27, 46, 0.15) !important;
+        padding: 4px 8px !important;
+    }
+
+    [data-testid="collapsedControl"] svg,
+    [data-testid="stSidebarCollapseButton"] svg,
+    button[aria-label="Expand sidebar"] svg,
+    button[aria-label="Collapse sidebar"] svg {
+        fill: #131b2e !important;
+        color: #131b2e !important;
+        stroke: #131b2e !important;
+        width: 20px !important;
+        height: 20px !important;
     }
 
     .block-container, [data-testid="block-container"] {
-        padding-top: 1rem !important;
+        padding-top: 0 !important;
         padding-bottom: 1rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
         max-width: 100% !important;
     }
 
@@ -151,25 +174,28 @@ st.markdown("""
         font-family: 'JetBrains Mono', monospace !important;
     }
 
-    /* Top Industrial Header Strip */
+    /* EDGE-TO-EDGE FULL-WIDTH TOP HEADER STRIP (TOUCHES TOP, LEFT, RIGHT) */
     .top-header-strip {
         background-color: #ffffff;
-        border: 1px solid #bfc7d2;
-        padding: 8px 16px;
-        margin-top: 0 !important;
-        margin-bottom: 12px !important;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(19, 27, 46, 0.05);
+        border-bottom: 1px solid #bfc7d2;
+        padding: 10px 24px 10px 56px !important;
+        margin-top: -1rem !important;
+        margin-left: -1rem !important;
+        margin-right: -1rem !important;
+        margin-bottom: 16px !important;
+        width: calc(100% + 2rem) !important;
+        box-shadow: 0 1px 3px rgba(19, 27, 46, 0.08);
         display: flex;
         align-items: center;
         justify-content: space-between;
+        border-radius: 0 !important;
     }
 
     .pill-badge {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 3px 8px;
+        padding: 4px 10px;
         border-radius: 4px;
         font-family: 'JetBrains Mono', monospace;
         font-size: 11px;
@@ -267,7 +293,7 @@ st.markdown("""
         color: #707881;
     }
 
-    /* File Uploader Dropzone and Upload Button Styling (ALWAYS VISIBLE & CRISP) */
+    /* File Uploader Dropzone and Upload Button Styling */
     [data-testid="stFileUploaderDropzone"] {
         background-color: #f2f3ff !important;
         border: 2px dashed #006194 !important;
@@ -380,7 +406,7 @@ report_dir.mkdir(parents=True, exist_ok=True)
 output_dir.mkdir(parents=True, exist_ok=True)
 
 # -----------------------------------------------------------------------------
-# SIDEBAR OPERATOR CONTROLS
+# SIDEBAR OPERATOR CONTROLS & PCB PROFILE TEMPLATE SELECTOR
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("""
@@ -392,6 +418,7 @@ with st.sidebar:
 
     st.markdown("<h4 style='font-family: Space Grotesk; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; color: #131b2e;'>OPERATOR CONTROLS</h4>", unsafe_allow_html=True)
 
+    # PCB Profile Template Selector Dropdown
     device_options = {
         "Arduino Uno": "arduino_uno",
         "ESP32 DevKit": "esp32_devkit",
@@ -405,12 +432,12 @@ with st.sidebar:
         template_idx = 0
 
     selected_device_lbl = st.selectbox(
-        "PCB Profile Template",
+        "Select PCB Template Profile",
         options=list(device_options.keys()),
         index=template_idx,
         key="temp_select_key",
         on_change=on_template_change,
-        help="Loads expected component footprint definitions."
+        help="Loads expected component footprint definitions and dimensions."
     )
     selected_template_stem = device_options[selected_device_lbl]
     st.session_state.selected_template = selected_device_lbl
@@ -494,11 +521,11 @@ h_mm = board_dims.get("height_mm", "53.4")
 critical_comps = [c["id"] for c in template.get("components", [])]
 
 # -----------------------------------------------------------------------------
-# SLEEK COMPACT TOP HEADER STRIP
+# SLEEK EDGE-TO-EDGE FULL-WIDTH TOP HEADER STRIP (TOUCHES TOP, LEFT & RIGHT)
 # -----------------------------------------------------------------------------
 st.markdown(f"""
-<div class="top-header-strip flex flex-wrap items-center justify-between gap-3">
-    <div style="display: flex; align-items: center; gap: 10px;">
+<div class="top-header-strip">
+    <div style="display: flex; align-items: center; gap: 12px;">
         <div style="width: 32px; height: 32px; background-color: #006194; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #ffffff; font-weight: bold; font-size: 16px;">🔬</div>
         <div>
             <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; margin: 0; text-transform: uppercase; color: #131b2e; line-height: 1.2;">
