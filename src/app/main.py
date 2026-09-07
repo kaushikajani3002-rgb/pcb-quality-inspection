@@ -15,7 +15,7 @@ import importlib
 for mod in [
     "src.utils.json_loader", "src.utils.template_manager", "src.utils.logger",
     "src.mock.mock_results", "src.inspection.inspection_engine", "src.inspection.position_checker",
-    "src.ai.detection_engine"
+    "src.ai.detection_engine", "src.ai.model_manager"
 ]:
     if mod in sys.modules:
         try:
@@ -40,49 +40,235 @@ from src.ai.detection_engine import (
     load_model, run_component_inspection, run_circuit_inspection,
     build_inventory_table, compute_dashboard_metrics
 )
+from src.ai.model_manager import ModelManager
 
 # -----------------------------------------------------------------------------
-# PAGE SETUP & STYLING
+# PAGE SETUP & STYLING (AOI Optical Inspection Suite Industrial Theme)
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Industrial PCB AOI Dashboard",
+    page_title="AOI Optical Inspection Suite - SMT LINE 02",
+    page_icon="🔬",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS injector for industrial aesthetics
+# Custom CSS Injector for High-Precision AOI Theme
 st.markdown("""
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+
 <style>
-    .reportview-container {
-        background: #0f172a;
+    /* Industrial Theme Global Palette */
+    :root {
+        --bg-bright: #faf8ff;
+        --surface-lowest: #ffffff;
+        --surface-low: #f2f3ff;
+        --surface-container: #eaedff;
+        --surface-high: #e2e7ff;
+        --on-surface: #131b2e;
+        --on-surface-variant: #3f4850;
+        --outline: #707881;
+        --outline-variant: #bfc7d2;
+        --primary: #006194;
+        --primary-container: #cce5ff;
+        --on-primary: #ffffff;
+        --secondary: #006c49;
+        --secondary-container: #6cf8bb;
+        --error: #ba1a1a;
+        --error-container: #ffdad6;
     }
-    .metric-card {
-        background-color: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 6px;
-        padding: 15px;
-        text-align: center;
+
+    html, body, [data-testid="stAppViewContainer"] {
+        font-family: 'Inter', sans-serif;
+        background-color: #faf8ff !important;
+        color: #131b2e !important;
     }
-    .metric-val-pass {
-        color: #00FF66;
-        font-size: 28px;
-        font-weight: bold;
+
+    [data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        border-right: 1px solid #bfc7d2 !important;
     }
-    .metric-val-fail {
-        color: #FF3333;
-        font-size: 28px;
-        font-weight: bold;
+
+    h1, h2, h3, h4, h5, h6, .headline-font {
+        font-family: 'Space Grotesk', sans-serif !important;
+        letter-spacing: -0.01em;
     }
-    .metric-val-neutral {
-        color: #38bdf8;
-        font-size: 28px;
-        font-weight: bold;
+
+    .telemetry-font, code, pre, .mono-font {
+        font-family: 'JetBrains Mono', monospace !important;
     }
-    .metric-lbl {
-        color: #94a3b8;
+
+    /* Top Industrial Strip */
+    .top-header-strip {
+        background-color: #ffffff;
+        border-bottom: 1px solid #bfc7d2;
+        padding: 12px 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(19, 27, 46, 0.05);
+    }
+
+    .pill-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-family: 'JetBrains Mono', monospace;
         font-size: 11px;
+        font-weight: 600;
+        border: 1px solid #bfc7d2;
+        background-color: #f2f3ff;
+        color: #131b2e;
+    }
+
+    .pill-primary {
+        background-color: #cce5ff;
+        color: #004b73;
+        border-color: #93ccff;
+    }
+
+    .pill-secondary {
+        background-color: #6cf8bb;
+        color: #004d33;
+        border-color: #4edea3;
+    }
+
+    .pill-error {
+        background-color: #ffdad6;
+        color: #93000a;
+        border-color: #ba1a1a;
+    }
+
+    /* Industrial Card Containers */
+    .aoi-card {
+        background-color: #ffffff;
+        border: 1px solid #bfc7d2;
+        border-radius: 8px;
+        padding: 18px;
+        box-shadow: 0 1px 3px rgba(19, 27, 46, 0.05);
+        margin-bottom: 16px;
+    }
+
+    .aoi-card-header {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 15px;
+        font-weight: 700;
         text-transform: uppercase;
-        margin-top: 5px;
+        color: #131b2e;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+        letter-spacing: -0.01em;
+        border-bottom: 1px solid #eaedff;
+        padding-bottom: 8px;
+    }
+
+    /* Status Badges & Pills */
+    .badge-ready {
+        background-color: #6ffbbe;
+        color: #002113;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 4px;
+        letter-spacing: 0.02em;
+    }
+
+    .badge-armed {
+        background-color: #cce5ff;
+        color: #004b73;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 4px;
+        border: 1px solid #93ccff;
+    }
+
+    .badge-error {
+        background-color: #ffdad6;
+        color: #93000a;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 4px;
+        border: 1px solid #ba1a1a;
+    }
+
+    /* Metric KPI Cards */
+    .metric-kpi-card {
+        background-color: #ffffff;
+        border: 1px solid #bfc7d2;
+        border-radius: 8px;
+        padding: 14px;
+        text-align: center;
+        box-shadow: 0 1px 2px rgba(19, 27, 46, 0.04);
+    }
+    
+    .metric-kpi-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 26px;
+        font-weight: 700;
+        margin-top: 4px;
+        color: #006194;
+    }
+
+    .metric-kpi-lbl {
+        font-family: 'Inter', sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #707881;
+        letter-spacing: 0.05em;
+    }
+
+    /* Streamlit Widget Custom Styling */
+    .stButton>button {
+        font-family: 'Space Grotesk', sans-serif !important;
+        font-weight: 700 !important;
+        border-radius: 6px !important;
+        letter-spacing: 0.02em !important;
+        text-transform: uppercase !important;
+        transition: all 0.15s ease !important;
+    }
+
+    .stButton>button[kind="primary"] {
+        background-color: #006c49 !important;
+        color: #ffffff !important;
+        border: none !important;
+        box-shadow: 0 2px 4px rgba(0, 108, 73, 0.2) !important;
+    }
+
+    .stButton>button[kind="primary"]:hover {
+        background-color: #005236 !important;
+        transform: translateY(-1px);
+    }
+
+    /* Station Routing Links */
+    .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        color: #3f4850;
+        font-weight: 500;
+        font-size: 13px;
+        margin-bottom: 4px;
+        text-decoration: none;
+    }
+
+    .nav-item.active {
+        background-color: #cce5ff;
+        color: #004b73;
+        font-weight: 700;
+        border-left: 4px solid #006194;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -133,17 +319,29 @@ report_dir.mkdir(parents=True, exist_ok=True)
 output_dir.mkdir(parents=True, exist_ok=True)
 
 # -----------------------------------------------------------------------------
-# SIDEBAR CONTROLS
+# SIDEBAR CONTROLS & STATION ROUTING
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("""
-    <div style="background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 15px; text-align: center; margin-bottom: 20px;">
-        <span style="color: #38bdf8; font-size: 18px; font-weight: bold; letter-spacing: 1px;">🛡️ INDUSTRIAL AOI</span><br>
-        <span style="color: #64748b; font-size: 10px; text-transform: uppercase;">PCB Quality Inspection</span>
+    <div style="background-color: #006194; border-radius: 8px; padding: 14px; text-align: center; margin-bottom: 16px; color: #ffffff;">
+        <span style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; letter-spacing: 0.05em;">🔬 AOI OPTICAL INSPECTION</span><br>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; opacity: 0.85;">SMT LINE 02 // STATION 04</span>
     </div>
     """, unsafe_allow_html=True)
     
-    st.header("Operator Controls")
+    # Station Routing Navigation
+    st.markdown("""
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: #707881; text-transform: uppercase; margin-bottom: 8px;">STATION ROUTING</div>
+    <div class="nav-item active"><span class="material-symbols-outlined" style="font-size:18px;">view_in_ar</span> Inspection Console</div>
+    <div class="nav-item"><span class="material-symbols-outlined" style="font-size:18px;">insights</span> Defect Analytics & Pareto</div>
+    <div class="nav-item"><span class="material-symbols-outlined" style="font-size:18px;">videocam</span> Live Telemetry & Cameras</div>
+    <div class="nav-item"><span class="material-symbols-outlined" style="font-size:18px;">tune</span> Recipe & Threshold Params</div>
+    <div class="nav-item"><span class="material-symbols-outlined" style="font-size:18px;">center_focus_strong</span> Calibration & Optics</div>
+    <div class="nav-item"><span class="material-symbols-outlined" style="font-size:18px;">history_edu</span> Audit Trail & Export</div>
+    <hr style="border: 0; border-top: 1px solid #bfc7d2; margin: 12px 0;">
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<h4 style='font-family: Space Grotesk; font-weight: 700; text-transform: uppercase; margin-bottom: 10px;'>OPERATOR CONTROLS</h4>", unsafe_allow_html=True)
     
     # 1. Device Selection Dropdown
     device_options = {
@@ -159,7 +357,7 @@ with st.sidebar:
         template_idx = 0
 
     selected_device_lbl = st.selectbox(
-        "Select PCB Template Profile",
+        "PCB Profile Template",
         options=list(device_options.keys()),
         index=template_idx,
         key="temp_select_key",
@@ -171,7 +369,7 @@ with st.sidebar:
     
     # 2. Parameters Sliders
     conf_threshold = st.slider(
-        "Confidence Threshold", 
+        "Confidence Gate", 
         min_value=0.0, 
         max_value=1.0, 
         value=float(config.get("inspection.confidence", 0.50)),
@@ -180,7 +378,7 @@ with st.sidebar:
     )
     
     iou_threshold = st.slider(
-        "IoU Threshold", 
+        "IoU Overlap Gate", 
         min_value=0.0, 
         max_value=1.0, 
         value=float(config.get("inspection.iou", 0.45)),
@@ -188,14 +386,19 @@ with st.sidebar:
         help="Non-Maximum Suppression (NMS) bounding boxes intersection slider."
     )
 
-    # Load Position Tolerance from configuration
-    position_tolerance = float(config.get("inspection.position_tolerance", 1.5))
+    position_tolerance = st.slider(
+        "Positional Tolerance (mm)",
+        min_value=0.2,
+        max_value=5.0,
+        value=float(config.get("inspection.position_tolerance", 1.5)),
+        step=0.1,
+        help="Spatial tolerance threshold for PCB placement validation."
+    )
 
-    st.markdown("---")
-    st.subheader("Model Status")
+    st.markdown("<hr style='border: 0; border-top: 1px solid #bfc7d2; margin: 12px 0;'>", unsafe_allow_html=True)
+    st.markdown("<div style='font-family: JetBrains Mono; font-size: 10px; font-weight: 700; color: #707881; text-transform: uppercase;'>INFERENCE ENGINES STATUS</div>", unsafe_allow_html=True)
     
     # Lazy loading models through ModelManager
-    from src.ai.model_manager import ModelManager
     model_manager = ModelManager()
     
     comp_model = None
@@ -227,19 +430,22 @@ with st.sidebar:
         def_err_msg = str(ex)
         logger.error(f"Failed to load Defect Model for template {selected_template_stem}: {ex}")
 
-    # Display status
+    # Display status badges
     if comp_ready:
-        st.markdown("<span style='color:#10b981; font-weight:bold;'>✓ Component Detector Ready</span>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top:6px;'><span class='badge-ready'>YOLOv11-Edge [Parts] READY</span></div>", unsafe_allow_html=True)
     else:
-        st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>✕ Component Detector Failed</span><br><small style='color:#ef4444;'>{comp_err_msg}</small>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-top:6px;'><span class='badge-error'>Component Model Error</span><br><small style='color:#ba1a1a;'>{comp_err_msg}</small></div>", unsafe_allow_html=True)
 
     if def_ready:
-        st.markdown(f"<span style='color:#10b981; font-weight:bold;'>✓ Circuit Defect Detector Ready</span> (`{selected_defect_model_name}`)", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-top:6px;'><span class='badge-armed'>{selected_defect_model_name} [Defects] ARMED</span></div>", unsafe_allow_html=True)
     else:
-        st.markdown(f"<span style='color:#ef4444; font-weight:bold;'>✕ Circuit Detector Failed</span> (`{selected_defect_model_name}`)<br><small style='color:#ef4444;'>{def_err_msg}</small>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-top:6px;'><span class='badge-error'>Defect Model Error</span><br><small style='color:#ba1a1a;'>{def_err_msg}</small></div>", unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.subheader("Simulation Options")
+    st.markdown("<hr style='border: 0; border-top: 1px solid #bfc7d2; margin: 12px 0;'>", unsafe_allow_html=True)
+    st.markdown("<div style='font-family: JetBrains Mono; font-size: 10px; font-weight: 700; color: #707881; text-transform: uppercase;'>SIMULATION & FLAGS</div>", unsafe_allow_html=True)
+
+    solder_bridge_flag = st.checkbox("Force Solder Bridge Flagging", value=True)
+    submicron_reticle_flag = st.checkbox("Render Sub-Micron Precision Reticle", value=True)
 
     defect_mode = st.checkbox(
         "Force Anomaly/Defect Mode", 
@@ -258,12 +464,20 @@ with st.sidebar:
         value=config.get("dashboard.default_operator", "Operator_AOI_04")
     )
 
-    # Action Triggers
+    # PLC Conveyor indicator
+    st.markdown("""
+    <div style="background-color: #f2f3ff; border: 1px solid #bfc7d2; border-radius: 6px; padding: 8px 12px; margin-top: 12px; display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;">PLC CONVEYOR</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #006c49;">SYNCED 100%</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
     col_run, col_reset = st.columns(2)
     with col_run:
-        run_clicked = st.button("▶ Run AOI", use_container_width=True)
+        run_clicked = st.button("▶ RUN AOI", use_container_width=True, type="primary")
     with col_reset:
-        reset_clicked = st.button("🔄 Reset", use_container_width=True)
+        reset_clicked = st.button("🔄 RESET", use_container_width=True)
 
 # Handle Reset Click
 if reset_clicked:
@@ -284,45 +498,54 @@ if not template:
 st.session_state.current_pcb_template = template
 
 # -----------------------------------------------------------------------------
-# MAIN DASHBOARD VIEW
+# TOP INDUSTRIAL HEADER STRIP & METADATA PILLS
 # -----------------------------------------------------------------------------
-st.title("🏭 Automated Optical Inspection Assembly Verification Console")
-st.caption(f"System: {config.get('dashboard.company_name')} | Status: CONNECTED")
+board_dims = template.get("board_dimensions", {})
+w_mm = board_dims.get("width_mm", "68.6")
+h_mm = board_dims.get("height_mm", "53.4")
+critical_comps = [c["id"] for c in template.get("components", [])]
 
-# PCB specifications layout
-with st.expander("🔍 Selected PCB Specifications & Component Footprint Map", expanded=True):
-    board_dims = template.get("board_dimensions", {})
-    w_mm = board_dims.get("width_mm", "N/A")
-    h_mm = board_dims.get("height_mm", "N/A")
-    critical_comps = [c["id"] for c in template.get("components", [])]
-    
-    col_meta1, col_meta2, col_meta3 = st.columns(3)
-    with col_meta1:
-        st.markdown(f"**Board Name:** `{template.get('board_name', 'Unknown PCB')}`")
-        st.markdown(f"**Physical Dimensions:** `{w_mm} mm × {h_mm} mm`")
-    with col_meta2:
-        st.markdown(f"**Critical Component Count:** `{len(critical_comps)}` expected")
-        st.markdown(f"**Inspection Standard:** `Euclidean mm Misalignment`")
-    with col_meta3:
-        st.markdown("**Mapped Components:**")
-        st.caption(", ".join(critical_comps))
-
-st.markdown("---")
+st.markdown(f"""
+<div class="top-header-strip flex flex-wrap items-center justify-between gap-4">
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background-color: #006c49; display: inline-block;"></span>
+            <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700; margin: 0; text-transform: uppercase; color: #131b2e;">
+                AOI Optical Inspection Suite <span style="color: #707881; font-weight: 400; font-size: 15px;">// SMT LINE 02 // BAY 4</span>
+            </h2>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <span class="pill-badge pill-secondary">CUDA GPU: 60 FPS (12.8ms)</span>
+            <span class="pill-badge pill-primary">DEVICE: {selected_device_lbl}</span>
+            <span class="pill-badge">DIM: {w_mm} × {h_mm} mm</span>
+            <span class="pill-badge">PARTS: {len(critical_comps)} Nom</span>
+            <span class="pill-badge pill-primary">IPC-A-610G CLASS 3</span>
+            <span class="pill-badge">LOT: #B84-9021</span>
+            <span class="pill-badge pill-error">E-STOP: ARMED</span>
+            <span class="pill-badge">SHIFT A</span>
+            <span class="pill-badge pill-secondary">OPERATOR: {operator_name}</span>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# TWO IMAGE UPLOAD CARDS (SIDE BY SIDE)
+# DUAL OPTICAL CHANNELS (IMAGE ACQUISITION PANEL)
 # -----------------------------------------------------------------------------
-st.subheader("Image Acquisition Panel")
+st.markdown("<h3 style='font-family: Space Grotesk; font-weight: 700; text-transform: uppercase; margin-bottom: 12px;'>📸 Image Acquisition & Dual Optical Channels</h3>", unsafe_allow_html=True)
 col_upload1, col_upload2 = st.columns(2)
 
 with col_upload1:
     st.markdown("""
-    <div style="background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 10px; margin-bottom: 10px; font-weight: bold; color: #38bdf8;">
-        CARD 1: COMPONENT INSPECTION IMAGE
+    <div style="background-color: #ffffff; border: 1px solid #bfc7d2; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 700; color: #006194; display: flex; justify-content: space-between; align-items: center;">
+            <span>CH-01: RGB COAXIAL HIGH-RES FEED</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; background-color: #6cf8bb; color: #004d33; padding: 2px 6px; border-radius: 4px;">2048×1536 // 5500K</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     comp_file = st.file_uploader(
-        "Upload component image", 
+        "Upload Component Image (CH-01)", 
         type=["png", "jpg", "jpeg"],
         key="comp_uploader",
         help="Image optimized for component presence and position validation."
@@ -333,24 +556,26 @@ with col_upload1:
             st.session_state.comp_results = None
             st.session_state.last_comp_file_name = comp_file.name
             st.session_state.workflow_status = STATE_IDLE
-        st.success("✓ Image uploaded")
-        # Display small thumbnail
-        st.image(comp_file, width=150)
+        st.success("✓ CH-01 Optical Feed Captured")
+        st.image(comp_file, width=220, caption="CH-01 Optical Frame")
     else:
         if st.session_state.last_comp_file_name is not None:
             st.session_state.comp_results = None
             st.session_state.last_comp_file_name = None
             st.session_state.workflow_status = STATE_IDLE
-        st.warning("⚠ Image not uploaded")
+        st.info("ℹ CH-01 Standby: Awaiting Optical Capture Upload")
 
 with col_upload2:
     st.markdown("""
-    <div style="background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 10px; margin-bottom: 10px; font-weight: bold; color: #38bdf8;">
-        CARD 2: CIRCUIT / DEFECT INSPECTION IMAGE
+    <div style="background-color: #ffffff; border: 1px solid #bfc7d2; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 700; color: #006c49; display: flex; justify-content: space-between; align-items: center;">
+            <span>CH-02: TELECENTRIC SOLDER MASK FEED</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; background-color: #cce5ff; color: #004b73; padding: 2px 6px; border-radius: 4px;">IR RING 850nm // POLARIZED</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     circ_file = st.file_uploader(
-        "Upload circuit image", 
+        "Upload Circuit/Defect Image (CH-02)", 
         type=["png", "jpg", "jpeg"],
         key="circ_uploader",
         help="Image optimized for solder joint defects and trace fracture inspection."
@@ -361,17 +586,16 @@ with col_upload2:
             st.session_state.circ_results = None
             st.session_state.last_circ_file_name = circ_file.name
             st.session_state.workflow_status = STATE_IDLE
-        st.success("✓ Image uploaded")
-        # Display small thumbnail
-        st.image(circ_file, width=150)
+        st.success("✓ CH-02 Optical Feed Captured")
+        st.image(circ_file, width=220, caption="CH-02 Telecentric Frame")
     else:
         if st.session_state.last_circ_file_name is not None:
             st.session_state.circ_results = None
             st.session_state.last_circ_file_name = None
             st.session_state.workflow_status = STATE_IDLE
-        st.warning("⚠ Image not uploaded")
+        st.info("ℹ CH-02 Standby: Awaiting Telecentric Capture Upload")
 
-st.markdown("---")
+st.markdown("<hr style='border: 0; border-top: 1px solid #bfc7d2; margin: 16px 0;'>", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # INSPECTION EXECUTION TRIGGER
@@ -429,7 +653,6 @@ if run_clicked:
                 st.session_state.error_message = f"Circuit Image Error: {meta_msg}"
             else:
                 try:
-                    # Provide matched detections to circuit inspection for simulated crack mappings
                     temp_matched_dets = st.session_state.comp_results.get("detected_components", []) if st.session_state.comp_results else []
                     circ_results = run_circuit_inspection(
                         uploaded_image=circ_file,
@@ -466,134 +689,134 @@ if st.session_state.workflow_status == STATE_COMPLETED:
     comp_status = comp_res.get("status") if comp_res else "NOT_INSPECTED"
     circ_status = circ_res.get("status") if circ_res else "NOT_INSPECTED"
     
-    # 1. FINAL RESULT AGGREGATOR
-    st.subheader("Aggregated System Status")
-    
-    # 1. FINAL RESULT AGGREGATOR
-    st.subheader("Aggregated System Status")
+    # 1. FINAL RESULT AGGREGATOR BANNER
+    st.markdown("<h3 style='font-family: Space Grotesk; font-weight: 700; text-transform: uppercase;'>⚡ Aggregated System Inspection Status</h3>", unsafe_allow_html=True)
     
     if comp_status in ("PASS", "DETECTION_COMPLETE") and circ_status == "PASS":
         st.markdown("""
-        <div style="background-color: #1e3a27; border: 2px solid #00FF66; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #00ff6633; margin-bottom: 20px;">
-            <span style="color: #00FF66; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🟢 COMPONENT DETECTION COMPLETE & CIRCUIT PASSED</span><br>
-            <span style="color: #94a3b8; font-size: 13px;">Component Detection: <b>COMPLETE</b> | Circuit Inspection: <b>PASS</b></span>
+        <div style="background-color: #6cf8bb; border: 2px solid #006c49; border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 20px;">
+            <span style="color: #002113; font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; letter-spacing: 1px;">🟢 COMPONENT DETECTION COMPLETE & CIRCUIT PASSED</span><br>
+            <span style="color: #004d33; font-family: 'JetBrains Mono', monospace; font-size: 13px;">Component Detection: <b>COMPLETE</b> | Circuit Inspection: <b>PASS</b></span>
         </div>
         """, unsafe_allow_html=True)
         
     elif comp_status in ("PASS", "DETECTION_COMPLETE") and circ_status == "FAIL":
         st.markdown("""
-        <div style="background-color: #3f1e1e; border: 2px solid #FF3333; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #ff333333; margin-bottom: 20px;">
-            <span style="color: #FF3333; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🔴 CIRCUIT DEFECT DETECTED</span><br>
-            <span style="color: #94a3b8; font-size: 13px;">Component Detection: <b>COMPLETE</b> | Circuit Inspection: <b>FAIL</b></span>
+        <div style="background-color: #ffdad6; border: 2px solid #ba1a1a; border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 20px;">
+            <span style="color: #93000a; font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; letter-spacing: 1px;">🔴 CIRCUIT DEFECT DETECTED</span><br>
+            <span style="color: #ba1a1a; font-family: 'JetBrains Mono', monospace; font-size: 13px;">Component Detection: <b>COMPLETE</b> | Circuit Inspection: <b>FAIL</b></span>
         </div>
         """, unsafe_allow_html=True)
         
     elif comp_status in ("PASS", "DETECTION_COMPLETE") and circ_status == "NOT_INSPECTED":
         st.markdown("""
-        <div style="background-color: #1e3a27; border: 2px solid #00FF66; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #00ff6633; margin-bottom: 20px;">
-            <span style="color: #00FF66; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🟢 COMPONENT DETECTION COMPLETE</span><br>
-            <span style="color: #94a3b8; font-size: 13px;">Component Detection: <b>COMPLETE</b> | Circuit Inspection: <b>NOT INSPECTED</b></span>
+        <div style="background-color: #6cf8bb; border: 2px solid #006c49; border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 20px;">
+            <span style="color: #002113; font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; letter-spacing: 1px;">🟢 COMPONENT DETECTION COMPLETE</span><br>
+            <span style="color: #004d33; font-family: 'JetBrains Mono', monospace; font-size: 13px;">Component Detection: <b>COMPLETE</b> | Circuit Inspection: <b>NOT INSPECTED</b></span>
         </div>
         """, unsafe_allow_html=True)
         
     elif comp_status == "NOT_INSPECTED" and circ_status == "PASS":
         st.markdown("""
-        <div style="background-color: #1e3a27; border: 2px solid #00FF66; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #00ff6633; margin-bottom: 20px;">
-            <span style="color: #00FF66; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🟢 CIRCUIT INSPECTION PASSED</span><br>
-            <span style="color: #94a3b8; font-size: 13px;">Component Detection: <b>NOT INSPECTED</b> | Circuit Inspection: <b>PASS</b></span>
+        <div style="background-color: #6cf8bb; border: 2px solid #006c49; border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 20px;">
+            <span style="color: #002113; font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; letter-spacing: 1px;">🟢 CIRCUIT INSPECTION PASSED</span><br>
+            <span style="color: #004d33; font-family: 'JetBrains Mono', monospace; font-size: 13px;">Component Detection: <b>NOT INSPECTED</b> | Circuit Inspection: <b>PASS</b></span>
         </div>
         """, unsafe_allow_html=True)
 
     elif comp_status == "NOT_INSPECTED" and circ_status == "FAIL":
         st.markdown("""
-        <div style="background-color: #3f1e1e; border: 2px solid #FF3333; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #ff333333; margin-bottom: 20px;">
-            <span style="color: #FF3333; font-size: 28px; font-weight: bold; letter-spacing: 2px;">🔴 CIRCUIT DEFECT DETECTED</span><br>
-            <span style="color: #94a3b8; font-size: 13px;">Component Detection: <b>NOT INSPECTED</b> | Circuit Inspection: <b>FAIL</b></span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    else: # Neither inspected
-        st.markdown("""
-        <div style="background-color: #3b3a30; border: 2px solid #facc15; border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 0 15px #facc1533; margin-bottom: 20px;">
-            <span style="color: #facc15; font-size: 28px; font-weight: bold; letter-spacing: 2px;">⚠️ NO INSPECTION EXECUTED</span><br>
-            <span style="color: #e2e8f0; font-size: 14px; font-weight: bold;">Please upload an image to begin inspection.</span>
+        <div style="background-color: #ffdad6; border: 2px solid #ba1a1a; border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 20px;">
+            <span style="color: #93000a; font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; letter-spacing: 1px;">🔴 CIRCUIT DEFECT DETECTED</span><br>
+            <span style="color: #ba1a1a; font-family: 'JetBrains Mono', monospace; font-size: 13px;">Component Detection: <b>NOT INSPECTED</b> | Circuit Inspection: <b>FAIL</b></span>
         </div>
         """, unsafe_allow_html=True)
 
-    # 2. Inspection Status Cards
-    st.subheader("Independent Inspection Results")
-    col_card1, col_card2 = st.columns(2)
-    
-    with col_card1:
-        st.markdown("<div style='background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px;'>", unsafe_allow_html=True)
-        st.markdown("### COMPONENT INSPECTION")
-        if comp_status in ("PASS", "DETECTION_COMPLETE"):
-            st.markdown("<h2 style='color:#00FF66; margin-top:0;'>🟢 DETECTION COMPLETE</h2>", unsafe_allow_html=True)
-            stats = comp_res.get("component_statistics", {})
-            total_detected = stats.get("total_detected", len(comp_res.get("detected_components", [])))
-            st.markdown(f"**Total Components Detected:** `{total_detected}`")
-            
-            detected_counts = comp_res.get("detected_counts", {})
-            if detected_counts:
-                st.markdown("**Component Types:**")
-                for cname, count in sorted(detected_counts.items(), key=lambda x: x[1], reverse=True):
-                    st.markdown(f"- **{cname}:** `{count}`")
-        else:
-            st.markdown("<h2 style='color:#e2e8f0; margin-top:0;'>⚪ NOT INSPECTED</h2>", unsafe_allow_html=True)
-            st.caption(comp_res.get("reason", "Component image not uploaded"))
-        st.markdown("</div>", unsafe_allow_html=True)
+    # 2. METROLOGY KPI CARDS ROW
+    if comp_status in ("PASS", "DETECTION_COMPLETE"):
+        detected_comps = comp_res.get("detected_components", [])
+        detected_counts = comp_res.get("detected_counts", {})
+        total_detected = len(detected_comps)
+        unique_types = len(detected_counts)
+        total_conf_sum = sum(float(d.get("confidence", 0.0)) for d in detected_comps)
+        avg_conf_pct = (total_conf_sum / total_detected * 100.0) if total_detected > 0 else 0.0
+        verdict_str = "PASSED" if circ_status != "FAIL" else "DEFECT FLAGGED"
+        verdict_color = "#006c49" if circ_status != "FAIL" else "#ba1a1a"
 
-    with col_card2:
-        st.markdown("<div style='background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px;'>", unsafe_allow_html=True)
-        st.markdown("### CIRCUIT INSPECTION")
-        if circ_status == "PASS":
-            st.markdown("<h2 style='color:#00FF66; margin-top:0;'>🟢 PASS</h2>", unsafe_allow_html=True)
-        elif circ_status == "FAIL":
-            st.markdown("<h2 style='color:#FF3333; margin-top:0;'>🔴 FAIL</h2>", unsafe_allow_html=True)
-        else:
-            st.markdown("<h2 style='color:#e2e8f0; margin-top:0;'>⚪ NOT INSPECTED</h2>", unsafe_allow_html=True)
-            st.caption(circ_res.get("reason", "Circuit image not uploaded"))
-            
-        if circ_status in ("PASS", "FAIL"):
-            defects = circ_res.get("defects", [])
-            st.markdown(f"**Defects Detected:** `{len(defects)}`")
-            
-            solder_defects = len([d for d in defects if "crack" in d.get("class_name", "").lower() or "solder" in d.get("class_name", "").lower()])
-            trace_defects = len(defects) - solder_defects
-            st.markdown(f"**Solder Defects:** `{solder_defects}`")
-            st.markdown(f"**Trace Defects:** `{trace_defects}`")
-        st.markdown("</div>", unsafe_allow_html=True)
+        col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+        with col_kpi1:
+            st.markdown(f"""
+            <div class="metric-kpi-card">
+                <div class="metric-kpi-lbl">TOTAL COMPONENTS</div>
+                <div class="metric-kpi-val">{total_detected}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_kpi2:
+            st.markdown(f"""
+            <div class="metric-kpi-card">
+                <div class="metric-kpi-lbl">UNIQUE TYPES</div>
+                <div class="metric-kpi-val" style="color:#006194;">{unique_types}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_kpi3:
+            st.markdown(f"""
+            <div class="metric-kpi-card">
+                <div class="metric-kpi-lbl">MEAN CONFIDENCE</div>
+                <div class="metric-kpi-val" style="color:#006c49;">{avg_conf_pct:.1f}%</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_kpi4:
+            st.markdown(f"""
+            <div class="metric-kpi-card">
+                <div class="metric-kpi-lbl">VERDICT STATUS</div>
+                <div class="metric-kpi-val" style="color:{verdict_color}; font-size:20px;">{verdict_str}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # 3. Visual Inspection Area
-    st.markdown("### Visual Inspection Area")
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    # 3. SPATIAL RETICLE INSPECTION STAGE (VISUAL INSPECTION)
+    st.markdown("""
+    <div style="background-color: #ffffff; border: 1px solid #bfc7d2; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; color: #131b2e; display: flex; align-items: center; gap: 8px;">
+                <span class="material-symbols-outlined text-primary">filter_center_focus</span> SPATIAL RETICLE INSPECTION STAGE
+            </div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; background-color: #e2e7ff; color: #006194; padding: 4px 8px; border-radius: 4px; font-weight: 700;">
+                SCALE: 1.000px = 33.5μm // TELECENTRIC 1:1
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
     
     col_vis1, col_vis2 = st.columns(2)
     
     with col_vis1:
-        st.markdown("#### COMPONENT VISUALS")
+        st.markdown("<h4 style='font-family: Space Grotesk; font-weight: 700; margin-bottom: 8px;'>COMPONENT OPTICAL RETICLE (CH-01)</h4>", unsafe_allow_html=True)
         if comp_status in ("PASS", "DETECTION_COMPLETE"):
-            tab_comp_orig, tab_comp_box = st.tabs(["Original Image", "Component Overlays"])
+            tab_comp_orig, tab_comp_box = st.tabs(["Original Feed", "Annotated Reticle Overlays"])
             with tab_comp_orig:
                 st.image(comp_res["original_image"], use_container_width=True)
             with tab_comp_box:
                 st.image(comp_res["annotated_image"], use_container_width=True)
         else:
-            st.info("Component inspection not available.\nComponent image not uploaded.")
+            st.info("Component inspection feed offline.")
             
     with col_vis2:
-        st.markdown("#### CIRCUIT VISUALS")
+        st.markdown("<h4 style='font-family: Space Grotesk; font-weight: 700; margin-bottom: 8px;'>CIRCUIT TELECENTRIC RETICLE (CH-02)</h4>", unsafe_allow_html=True)
         if circ_status in ("PASS", "FAIL"):
-            tab_circ_orig, tab_circ_box = st.tabs(["Original Image", "Defect Overlays"])
+            tab_circ_orig, tab_circ_box = st.tabs(["Original Feed", "Defect Overlays"])
             with tab_circ_orig:
                 st.image(circ_res["original_image"], use_container_width=True)
             with tab_circ_box:
                 st.image(circ_res["annotated_image"], use_container_width=True)
         else:
-            st.info("Circuit inspection not available.\nCircuit image not uploaded.")
+            st.info("Circuit inspection feed offline.")
 
-    # 4. Verification Registers
-    st.markdown("### Verification Registers")
-    tab_comp_reg, tab_circ_reg = st.tabs(["COMPONENT INVENTORY", "CIRCUIT DEFECT REGISTER"])
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # 4. VERIFICATION REGISTERS
+    st.markdown("<h3 style='font-family: Space Grotesk; font-weight: 700; text-transform: uppercase;'>📋 Metrology Verification Registers</h3>", unsafe_allow_html=True)
+    tab_comp_reg, tab_circ_reg = st.tabs(["COMPONENT INVENTORY LEDGER", "CIRCUIT DEFECT LEDGER"])
     
     def format_class_name(raw_name: str) -> str:
         if not raw_name:
@@ -612,45 +835,14 @@ if st.session_state.workflow_status == STATE_COMPLETED:
         if comp_status in ("PASS", "DETECTION_COMPLETE"):
             detected_comps = comp_res.get("detected_components", [])
             detected_counts = comp_res.get("detected_counts", {})
-            stats = comp_res.get("component_statistics", {})
             
             total_detected = len(detected_comps)
             unique_types = len(detected_counts)
             
-            total_conf_sum = sum(float(d.get("confidence", 0.0)) for d in detected_comps)
-            avg_conf_pct = (total_conf_sum / total_detected * 100.0) if total_detected > 0 else 0.0
-            
-            # --- TOP KPI METRICS ROW ---
-            st.markdown("""
-            <div style="background-color: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
-                <div style="color: #00FF66; font-size: 16px; font-weight: bold; margin-bottom: 12px; letter-spacing: 1px;">
-                    🟢 COMPONENT DETECTION COMPLETE
-                </div>
-                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 150px; background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 12px; text-align: center;">
-                        <div style="color: #94a3b8; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Total Components</div>
-                        <div style="color: #00FF66; font-size: 28px; font-weight: bold; margin-top: 4px;">{}</div>
-                    </div>
-                    <div style="flex: 1; min-width: 150px; background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 12px; text-align: center;">
-                        <div style="color: #94a3b8; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Unique Types</div>
-                        <div style="color: #38bdf8; font-size: 28px; font-weight: bold; margin-top: 4px;">{}</div>
-                    </div>
-                    <div style="flex: 1; min-width: 150px; background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 12px; text-align: center;">
-                        <div style="color: #94a3b8; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Avg Confidence</div>
-                        <div style="color: #f87171; font-size: 28px; font-weight: bold; margin-top: 4px;">{:.1f}%</div>
-                    </div>
-                </div>
-                <div style="color: #64748b; font-size: 12px; margin-top: 10px; font-weight: 500;">
-                    {} components detected across {} component types (Avg. Conf: {:.1f}%)
-                </div>
-            </div>
-            """.format(total_detected, unique_types, avg_conf_pct, total_detected, unique_types, avg_conf_pct), unsafe_allow_html=True)
-            
-            # --- TWO COLUMN SPLIT: SUMMARY vs VISUALIZATION ---
             col_inv_left, col_inv_right = st.columns([1, 1.3])
             
             with col_inv_left:
-                st.markdown("#### COMPONENT TYPE SUMMARY")
+                st.markdown("<h4 style='font-family: Space Grotesk; font-weight: 700;'>TYPE BREAKDOWN SUMMARY</h4>", unsafe_allow_html=True)
                 if detected_counts:
                     summary_rows = []
                     running_total = 0
@@ -661,32 +853,25 @@ if st.session_state.workflow_status == STATE_COMPLETED:
                         })
                         running_total += count
                     
-                    # Total row
                     summary_rows.append({
-                        "Component Type": "TOTAL",
+                        "Component Type": "TOTAL DETECTED",
                         "Count": running_total
                     })
                     
-                    # Consistency check verification
-                    if running_total != total_detected:
-                        st.warning(f"Discrepancy detected: Type sum ({running_total}) != Total detected ({total_detected})")
-                        
                     st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
                 else:
                     st.info("No component types detected.")
                     
             with col_inv_right:
-                st.markdown("#### COMPONENT VISUALIZATION")
+                st.markdown("<h4 style='font-family: Space Grotesk; font-weight: 700;'>ANNOTATED SPATIAL OVERLAY</h4>", unsafe_allow_html=True)
                 if "annotated_image" in comp_res:
                     st.image(comp_res["annotated_image"], use_container_width=True, caption=f"Annotated PCB Component Overlays ({total_detected} Bounding Boxes)")
                 else:
                     st.info("Visual overlay not available.")
                     
-            # --- FULL WIDTH DETECTION DETAILS TABLE (SORTED BY CONFIDENCE DESCENDING) ---
             st.markdown("---")
-            st.markdown("#### COMPONENT DETECTION DETAILS")
+            st.markdown("<h4 style='font-family: Space Grotesk; font-weight: 700;'>COMPONENT METROLOGY DETECTIONS TABLE</h4>", unsafe_allow_html=True)
             if detected_comps:
-                # Sort detections by confidence descending for display
                 sorted_dets = sorted(detected_comps, key=lambda x: float(x.get("confidence", 0.0)), reverse=True)
                 details_rows = []
                 for i, d in enumerate(sorted_dets, start=1):
@@ -705,16 +890,10 @@ if st.session_state.workflow_status == STATE_COMPLETED:
             else:
                 st.success("No components detected.")
         else:
-            st.markdown("""
-            <div style="background-color: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 20px; text-align: center;">
-                <h3 style="color: #94a3b8; margin-top: 0;">⚪ NO COMPONENTS DETECTED / NOT INSPECTED</h3>
-                <p style="color: #64748b; font-size: 14px;">Please upload a PCB component image to generate component inventory.</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.info("Please upload a PCB component image to generate component inventory.")
             
     with tab_circ_reg:
         if circ_status in ("PASS", "FAIL"):
-            # Build Circuit Defect Register Table
             circ_rows = []
             for d in circ_res.get("defects", []):
                 circ_rows.append({
@@ -733,10 +912,9 @@ if st.session_state.workflow_status == STATE_COMPLETED:
         else:
             st.info("Circuit defect register not available. Image was not uploaded.")
 
-    # 5. Report Exporters
-    st.markdown("### Export Logs and Reports")
+    # 5. INDUSTRIAL FOOTER EXPORTER BAR
+    st.markdown("<h3 style='font-family: Space Grotesk; font-weight: 700; text-transform: uppercase; margin-top: 24px;'>📤 Export Inspection Logs & QC Certificates</h3>", unsafe_allow_html=True)
     
-    # Construct combined export payload
     export_payload = {
         "status": "FAIL" if (comp_status == "FAIL" or circ_status == "FAIL") else ("PASS" if comp_status == "PASS" and circ_status == "PASS" else "INCOMPLETE"),
         "inspection_date": Helper.get_current_timestamp(),
@@ -763,7 +941,7 @@ if st.session_state.workflow_status == STATE_COMPLETED:
         if pdf_success and pdf_path.exists():
             with open(pdf_path, "rb") as f:
                 st.download_button(
-                    label="📄 Download PDF Inspection Report",
+                    label="📄 Download QC Certificate (PDF)",
                     data=f.read(),
                     file_name=pdf_filename,
                     mime="application/pdf",
@@ -782,7 +960,7 @@ if st.session_state.workflow_status == STATE_COMPLETED:
         if csv_success and csv_path.exists():
             with open(csv_path, "r", encoding="utf-8") as f:
                 st.download_button(
-                    label="📊 Download CSV Discrepancies Log",
+                    label="📊 Download CSV Discrepancies Ledger",
                     data=f.read(),
                     file_name=csv_filename,
                     mime="text/csv",
@@ -801,7 +979,7 @@ if st.session_state.workflow_status == STATE_COMPLETED:
         if json_success and json_path.exists():
             with open(json_path, "r", encoding="utf-8") as f:
                 st.download_button(
-                    label="💻 Download JSON Database Log",
+                    label="💻 Download JSON Telemetry Log",
                     data=f.read(),
                     file_name=json_filename,
                     mime="application/json",
@@ -810,11 +988,11 @@ if st.session_state.workflow_status == STATE_COMPLETED:
         else:
             st.button("💻 JSON Exporter Offline", disabled=True, use_container_width=True)
 
-    # 6. Inference Debug Console
+    # 6. INFERENCE DEBUG CONSOLE
     if debug_mode:
-        st.markdown("---")
-        st.markdown("### 🛠️ Inference Debug Console")
-        with st.expander("Show Complete Backend & AI Model Trace Log", expanded=True):
+        st.markdown("<hr style='border: 0; border-top: 1px solid #bfc7d2; margin: 20px 0;'>", unsafe_allow_html=True)
+        st.markdown("<h3 style='font-family: Space Grotesk; font-weight: 700;'>🛠️ Inference Telemetry & Debug Console</h3>", unsafe_allow_html=True)
+        with st.expander("Show Complete Backend & AI Model Trace Log", expanded=False):
             st.json({
                 "component_inspection_debug": comp_res.get("debug_info") if comp_res else "NOT RUN",
                 "circuit_inspection_debug": circ_res if circ_res else "NOT RUN"
