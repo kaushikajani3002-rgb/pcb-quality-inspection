@@ -77,13 +77,20 @@ class ModelManager:
             logger.info(f"Reusing cached YOLO model '{name}' for {context}")
             return cache[name]
 
-        # Resolve path (support relative project path or absolute fallback path)
+        # Resolve path (support relative project path, folder fallback, or absolute path)
         resolved_path = self.config.project_root / path_rel
         if not resolved_path.exists():
             abs_path = Path(path_rel)
             fallback_dataset_path = Path(r"D:\PCB\Dataset\Component_best.pt")
+            
+            # Check directory for alternative .pt file
+            dir_path = resolved_path.parent
+            pt_files = list(dir_path.glob("*.pt")) if dir_path.exists() else []
+            
             if abs_path.exists():
                 resolved_path = abs_path
+            elif pt_files:
+                resolved_path = pt_files[0]
             elif fallback_dataset_path.exists() and name.lower() == "component":
                 resolved_path = fallback_dataset_path
             else:
