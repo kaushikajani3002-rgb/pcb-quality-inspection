@@ -1,92 +1,90 @@
 # Project Progress Report: PCB Assembly AOI System
 
-This document summarizes the development milestones, technical achievements, and current implementation progress of the AI-Based Automated Optical Inspection (AOI) System as of August 12, 2026.
+This document summarizes the development milestones, technical achievements, architecture, and verification results of the **AI-Based Automated Optical Inspection (AOI) System** as of August 2026.
 
 ---
 
 ## 📊 Current Development Status
 
 | Feature / Component | Status | Description |
-| :--- | :--- | :--- |
-| **Industrial Operator Console** | 🟢 **100% Functional** | Streamlit dashboard containing visual widgets, sliders, image upload, and state machine controls. |
-| **JSON Template Managers** | 🟢 **100% Functional** | Loader verifying profiles (Arduino Uno, ESP32 DevKit, STM32 Blue Pill, Generic PCB) with normalized physical mm coordinates. |
-| **Component Verification Engine** | 🟢 **100% Functional** | Algorithmic checkers evaluating placement alignment (Euclidean millimeter offset), counts, missing, and extra items. |
-| **YOLO11m Component Detection** | 🟢 **100% Functional** | Integrates actual YOLO11m object detection (`All_cercit_finetuned_best.pt`) to count parts and locate center points. Includes rule-based mapper mapping 58 class names to general template categories. |
-| **Polymorphic Exporters** | 🟢 **100% Functional** | Factory pattern generating print-ready PDFs (ReportLab), CSV tables, and database-ready JSON logs. |
-| **Automated Defect Model Binding** | 🟢 **100% Functional** | Synchronizes template selections to auto-resolve default defect checking models (`DeepPCB`, `DsPCBSD+`, `HRIPCB`, `TDD-PCB`). |
-| **Model Caching & Management** | 🟢 **100% Functional** | Integrates `ModelManager` supporting lazy loading and runtime caching in Streamlit session state and standalone scripts. |
-| **Dual Inference Routing** | 🟢 **100% Functional** | Routes image analysis to both the Common Component model and profile-specific Defect YOLO model concurrently. |
-| **File Integrity & Magic Header Checks** | 🟢 **100% Functional** | Image upload validation securing file types (JPEG/PNG) and payload size limits. |
-| **OpenCV Perspective Preprocessing** | 🟡 **Planned** | Auto-alignment and homography transformations to warp camera angles before feeding YOLO. |
+| :--- | :---: | :--- |
+| **Industrial AOI Dashboard Console** | 🟢 **100% Functional** | Modern dark-slate Streamlit console with KPI summary cards, 2-column inventory view, sorted detection tables, and real-time state machine. |
+| **PCB Component Detection & Inventory** | 🟢 **100% Functional** | Real-time YOLO inference detecting all physical components (`resistor`, `capacitor`, `IC`, `connector`, `LED`, `diode`, `switch`, `transistor`, etc.) as the source of truth. |
+| **Dynamic Inventory KPI Metrics** | 🟢 **100% Functional** | Dynamically calculates Total Component Count, Unique Component Types, Average Confidence %, and Class Summary Table with sum verification. |
+| **Dual-Model Deep Learning Pipeline** | 🟢 **100% Functional** | Concurrent routing to Component YOLO Detector (`Component_best.pt` - 22 classes) and profile-specific Defect Detector (`DeepPCB`, `DsPCBSD+`, `HRIPCB`, `TDD-PCB`). |
+| **Automated Defect Model Auto-Binding** | 🟢 **100% Functional** | Auto-binds defect detector models according to selected PCB template profile (`arduino_uno`, `esp32_devkit`, `stm32_blue_pill`, `generic_pcb`). |
+| **ModelManager Caching & Fallback** | 🟢 **100% Functional** | PyTorch instance caching across Streamlit reruns, CUDA GPU acceleration, and fallback weight resolution (`D:\PCB\Dataset\Component_best.pt`). |
+| **Polymorphic Exporter Factory** | 🟢 **100% Functional** | Factory pattern generating **Multi-Sheet Excel Workbooks (.xlsx)**, flat **CSV ledgers**, styled **PDF quality certificates**, and **JSON database logs**. |
+| **Inference Threshold Optimization** | 🟢 **100% Functional** | `confidence` set to `0.25` default in `configs/inference.yaml` to detect all 45 components (including small SMD resistors, capacitors, LEDs, switches, chips, and headers). |
+| **Automated Verification Test Suite** | 🟢 **100% Functional** | Complete automated integration test suite (`validate_run.py`, `test_thresholds.py`, `test_workflow_scenarios.py`, `diagnose_full_pipeline.py`). |
+| **OpenCV Alignment Preprocessing** | 🟡 **Future Scope** | Perspective warping and homography transformation to align camera feeds before feeding YOLO. |
 
 ---
 
-## 🛠️ Detailed Technical Implementations
+## 🛠️ Key Technical Implementations
 
-### 1. Dual Inference Pipeline & Routing
-The main entry point for the inspection is `run_component_counting` inside `src/ai/detection_engine.py`. It executes:
-- **Component YOLO Model**: Loads `models/trained/Component/All_cercit_finetuned_best.pt` to detect board features. Maps bounding boxes to template expected layouts using a physical proximity checker. Maps 58 class names to general template categories (`IC`, `Resistor`, `Capacitor`, `LED`, `Connector`).
-- **Defect YOLO Model**: Loads the mapped defect model (e.g. `DeepPCB`, `DsPCBSD+`, `HRIPCB`, `TDD-PCB`) to check trace and solder joint anomalies.
-- **Visual Overlays**: Generates visual diagnostic images drawing green bounding boxes for correct components, yellow vectors for misalignment, pink rectangles for extra parts, and red bounding boxes for YOLO-detected trace faults.
+### 1. Component Detection & Inventory Engine (`src/ai/detection_engine.py`)
+- **Source of Truth**: Retains 100% of raw YOLO detections returned by `component_model.predict(source=img, conf=conf_slider, iou=iou_slider, imgsz=640)`.
+- **KPI Metrics**: Computes `total_detected`, `unique_types_count`, `avg_confidence`, and `detected_counts` grouped by exact YOLO class names.
+- **Visual Overlays**: Renders bright green bounding box overlays (`#00FF66`) labeled with `<class_name> <confidence>` for every detected component.
+- **Future Scope Preservation**: Verification logic (Missing, Extra, Misplaced, Spatial Template matching) is preserved inside `debug_info["future_scope_verification"]`.
 
-### 2. Streamlit State Synchronizer
-Inside `src/app/main.py`, selecting a PCB profile automatically resolves and binds the corresponding defect model:
-- **Arduino Uno** $\rightarrow$ Defect Model: `DeepPCB` (weights file: `models/trained/DeepPCB/DeepPCB.pt`)
-- **ESP32 DevKit** $\rightarrow$ Defect Model: `DsPCBSD+` (weights file: `models/trained/DsPCBSD+/DsPCBSD+.pt`)
-- **STM32 Blue Pill** $\rightarrow$ Defect Model: `HRIPCB` (weights file: `models/trained/HRIPCB/HRIPCB.pt`)
-- **Generic PCB** $\rightarrow$ Defect Model: `TDD-PCB` (weights file: `models/trained/TDD-PCB/PDD-PCB-best.pt`)
+### 2. Industrial AOI Dashboard Console (`src/app/main.py`)
+- **Dark Industrial Theme**: Sleek dark slate layout (`#0f172a`, `#1e293b`, `#334155`) with high contrast and compact spacing.
+- **Top KPI Cards**:
+  - `TOTAL COMPONENTS DETECTED` (e.g. `45`)
+  - `UNIQUE TYPES` (e.g. `9`)
+  - `AVERAGE CONFIDENCE` (e.g. `74.2%`)
+- **Two-Column Inventory Layout**:
+  - **Left**: `COMPONENT TYPE SUMMARY` table with class counts and `TOTAL` summary row + automated consistency check ($\sum \text{Counts} == \text{Total}$).
+  - **Right**: `COMPONENT VISUALIZATION` showing large annotated image with bounding box overlays.
+- **Sorted Detection Details Table**: Full width `COMPONENT DETECTION DETAILS` table sorted by confidence descending (`# | Component | Class ID | Confidence | X1 | Y1 | X2 | Y2 | Center`).
+- **Normalized Presentation**: Normalizes display strings (`ic -> IC`, `led -> LED`, `pcb -> PCB`, `capacitor -> Capacitor`, `resistor -> Resistor`, etc.) without altering raw class IDs.
 
-### 3. Model Cache Management
-The `ModelManager` implements caching:
-- Component model is loaded once and shared.
-- Defect models are lazy-loaded on demand and cached.
-- Persists loaded PyTorch instances in Streamlit's `st.session_state` or global variables to survive page reruns.
-- Identifies missing model path dependencies and raises rich-context errors before fallback.
+### 3. Multi-Format Polymorphic Exporter Factory (`src/utils/report_exporter.py`)
+- **Excel Exporter (`ExcelReportExporter` - `.xlsx`)**:
+  - **Sheet 1 — Summary**: PCB Profile, Image File, Timestamp, Model Path, Total Detections, Unique Types, Average Confidence, Confidence/IoU Thresholds, Device.
+  - **Sheet 2 — Component Summary**: Table of Component Type vs Count.
+  - **Sheet 3 — Detection Details**: Full inventory ledger with `#`, `Image`, `Component Class`, `Class ID`, `Confidence`, `X1`, `Y1`, `X2`, `Y2`, `Center X (Pct)`, `Center Y (Pct)`.
+- **CSV Exporter (`CSVReportExporter` - `.csv`)**: Flat tabular ledger of component inventory and circuit defect detections.
+- **PDF Exporter (`PDFReportExporter` - `.pdf`)**: Formatted quality certificate using ReportLab.
+- **JSON Exporter (`JSONReportExporter` - `.json`)**: Machine-readable inspection log.
 
 ---
 
 ## 🧪 Verification & Testing Results
 
-An automated integration validation test script (`tests/validate_run.py`) and a real inference test script (`tests/test_real_inference.py`) have been added to run checks on modules and configs.
+All 4 test suites pass with 100% success rate:
 
 ```bash
-# Execute integration checks
-$env:PYTHONIOENCODING="utf-8"; python tests/validate_run.py
+python tests/validate_run.py
+python tests/test_thresholds.py
+python -m unittest tests/test_workflow_scenarios.py
+python tests/diagnose_full_pipeline.py
 ```
 
-### Test Validation Output:
-* **Step 1: Testing imports...** $\rightarrow$ **✔ All imports succeeded!**
-* **Step 2: Testing ConfigLoader and path resolving...** $\rightarrow$ **✔ Configuration loading and merging succeeded!**
-* **Step 3: Testing TemplateManager...** $\rightarrow$ **✔ TemplateManager loading succeeded!**
-* **Step 4: Testing Mock Inspection pipeline...** $\rightarrow$ **✔ Mock Inspection pipeline succeeded!**
-* **Step 5: Testing AI detection model loading for all 5 real models...** $\rightarrow$ **✔ Component, DeepPCB, DsPCBSD+, HRIPCB, TDD-PCB loaded successfully!**
-* **Step 6: Testing PCB template $\rightarrow$ defect model mapping...** $\rightarrow$ **✔ Mappings verified!**
-* **Step 7: Executing ModelManager Integration Tests (10 Scenarios)...**
-  * `✔ Test 10: Configuration validation passed.`
-  * `✔ Test 1: Arduino configuration lookup passed.`
-  * `✔ Test 2: ESP32 configuration lookup passed.`
-  * `✔ Test 3: STM32 configuration lookup passed.`
-  * `✔ Test 4: Generic configuration lookup passed.`
-  * `✔ Test 5: Component model consistency verified.`
-  * `✔ Test 6: Profile model switching verified.`
-  * `✔ Test 8: Model manager caching verified.`
-  * `✔ Test 9: Model separation verified.`
-  * `✔ Test 7: Missing model validation verified.`
-* **🎉 ALL VALIDATIONS PASSED SUCCESSFULLY!**
+### Test Results Summary:
+* **`validate_run.py`**:
+  - Loaded all 5 YOLO models successfully (`Component`, `DeepPCB`, `DsPCBSD+`, `HRIPCB`, `TDD-PCB`).
+  - Executed all 7 pipeline steps & 10 ModelManager integration scenarios (**✔ PASSED**).
+* **`test_thresholds.py`**:
+  - Verified threshold propagation across `conf=0.20`, `conf=0.25`, `conf=0.50`, `conf=0.80` (**✔ PASSED**).
+* **`test_workflow_scenarios.py`**:
+  - Verified status aggregator logic for all inspection combinations (**✔ PASSED**).
+* **`diagnose_full_pipeline.py` (Reference Image `Arduino-uno.jpg`)**:
+  - **Raw YOLO Detections**: `45`
+  - **Final Inventory Detections**: `45`
+  - **UI Detection Table Rows**: `45`
+  - **Summary Table Sum**: `45` ($\sum \text{Counts} == 45$)
+  - **Excel Detail Sheet Rows**: `45`
 
 ---
 
 ## 📦 GitHub Release Synchronization
 
-The repository is synced to your remote GitHub page:
-* **GitHub Remote URL**: [https://github.com/kaushikajani3002-rgb/pcb-quality-inspection.git](https://github.com/kaushikajani3002-rgb/pcb-quality-inspection.git)
+* **GitHub Repository**: [https://github.com/kaushikajani3002-rgb/pcb-quality-inspection.git](https://github.com/kaushikajani3002-rgb/pcb-quality-inspection.git)
 * **Default Branch**: `main`
 * **Latest Commits**:
-  * Commit 1: `Initial commit: Industrial PCB AOI dashboard with YOLO11m component integration`
-  * Commit 2: `Add custom datasets documentation and YOLO training/inference scripts`
-  * Commit 3: `Add FILE_CATALOG.md detailing all folder and script operations`
-  * Commit 4: `Automate defect model selection and integrate dual inference routing`
-  * Commit 5: `Remove manual defect model dropdown - auto-bind to PCB template selection`
-  * Commit 6: `Add 4th PCB profile: Generic PCB -> TDD-PCB (defect-only, zero components)`
-  * Commit 7: `Implement ModelManager caching layer and structured dual-model mapping configurations`
-  * Commit 8: `Complete and verify 5-model backend integration with actual weights and validation checkers`
+  - `refactor: PCB component detection and inventory system UI and multi-sheet report export`
+  - `merge: integrate origin/main with component inventory refactor`
+

@@ -1,52 +1,85 @@
-# PCB Automated Optical Inspection (AOI) System - Architecture Guide
+# PCB Automated Optical Inspection (AOI) System - System Architecture & Presentation Reference
 
-This guide outlines the system's clean architecture and lists concrete pathways for integration of future modules (YOLO11m, OpenCV, FastAPI, Database, live feed, etc.).
+This document details the system architecture, dual-engine pipeline flow, software component breakdown, and module integration pathways for the Automated Optical Inspection (AOI) System.
 
-## Architectural Style
-The project adheres to **Clean Architecture** and **SOLID Principles**:
-- **Entities/Models**: Represented by JSON templates (e.g. `arduino_uno.json`) defining physical characteristics of the board.
-- **Use Cases/Checks**: Isolated under the `inspection/` folder (e.g., `MissingChecker`, `PositionChecker`). They only implement comparison logic without importing UI frameworks.
-- **Controllers/Presenters**: Handled by Streamlit (`app/main.py`) which acts as the operator's control panel.
-- **Frameworks/Drivers**: File system configurations, exporters, and logs.
+---
+
+## 🏗️ Architectural Style & Principles
+
+The application follows **Clean Architecture** and **SOLID Design Principles**:
+
+- **Domain Models & Templates**: JSON template profiles (`arduino_uno.json`, `esp32_devkit.json`, `stm32_blue_pill.json`, `generic_pcb.json`) defining physical board dimensions ($\text{mm}$), pixel scale factors, and expected component footprint layouts.
+- **Deep Learning Inspection Engines**: Isolated engine wrappers (`src/ai/detection_engine.py` & `src/ai/model_manager.py`) orchestrating 5 YOLO object detection models.
+- **Verification Engine & Checkers**: Modular algorithmic checkers (`ComponentCounter`, `MissingChecker`, `ExtraChecker`, `PositionChecker`, `CrackChecker`) under `src/inspection/`.
+- **Industrial Presenter Console**: Streamlit control panel (`src/app/main.py`) handling real-time UI state transitions (`IDLE`, `PROCESSING`, `COMPLETED`, `ERROR`), KPI cards, responsive data tables, and diagnostic views.
+- **Polymorphic Exporter Infrastructure**: Factory pattern exporter (`src/utils/report_exporter.py`) encapsulating multi-sheet Excel, CSV, PDF, and JSON quality log generation.
+
+---
+
+## 📊 System Architecture & Dataflow Diagram
 
 ```mermaid
 graph TD
-    UI[Streamlit Dashboard app/main.py] --> Config[Config Loader]
-    UI --> Template[Template Manager]
-    UI --> Engine[Inspection Engine]
-    Engine --> CC[Component Counter]
-    Engine --> MC[Missing Checker]
-    Engine --> EC[Extra Checker]
-    Engine --> PC[Position Checker]
-    Engine --> CR[Crack Checker]
-    UI --> Export[Report Exporter Factory]
-    Export --> PDF[PDF Exporter]
-    Export --> CSV[CSV Exporter]
-    Export --> JSON[JSON Exporter]
+    A[PCB Image Upload] --> B[Image Acquisition & Metadata Validation]
+    B --> C[Streamlit State Machine Controller]
+    
+    subgraph AI Inspection Layer
+    C --> D[ModelManager - Caching & Lazy Loader]
+    D --> E[YOLO Component Detector]
+    D --> F[Profile Defect Detector]
+    
+    E -->|22 Component Classes| G[Component Detection & Inventory Engine]
+    F -->|Trace & Solder Defects| H[Circuit Defect Scanning Engine]
+    end
+    
+    subgraph Operator Console Presentation
+    G --> I[Top KPI Metrics: Total, Unique Types, Avg Conf]
+    G --> J[2-Column View: Class Summary & Bounding Box Overlay]
+    G --> K[Sorted Component Details Table]
+    H --> L[Circuit Defect Register Tab]
+    end
+    
+    subgraph Quality Reporting Engine
+    I & J & K & L --> M[ReportExporterFactory]
+    M --> N[Multi-Sheet Excel Workbook .xlsx]
+    M --> O[CSV Ledger .csv]
+    M --> P[ReportLab PDF Certificate .pdf]
+    M --> Q[JSON Database Log .json]
+    end
 ```
 
 ---
 
-## Future Integrations Roadmap
+## 🔍 Module & Layer Breakdown
 
-### 1. YOLO11m & YOLO11m-Seg Models
-- **Where to Integrate**: Replace the mock implementation in `mock/mock_results.py` with an actual detection wrapper class `YoloDetector` (e.g. inside `models/yolo_wrapper.py`).
-- **OpenCV Alignment**: Implement a preprocessing step in `utils/preprocessor.py` utilizing OpenCV `findHomography` and `warpPerspective` to align incoming camera images with the template dimensions before passing them to the YOLO model.
+### 1. Presentation Layer (`src/app/main.py`)
+- Manages operator interactions, profile selection, confidence/IoU threshold sliders, image acquisition cards, KPI cards, visual overlay tabs, and inventory tables.
 
-### 2. FastAPI Interface
-- **Where to Integrate**: Create a new folder `api/` with `api/routes.py` and `api/server.py`.
-- **Methodology**: Move the `InspectionEngine` call inside a POST endpoint `/inspect` that accepts image files and returns the unified JSON results payload. The Streamlit dashboard can then act as a lightweight client querying the FastAPI server over HTTP/WebSockets.
+### 2. AI & Detection Layer (`src/ai/`)
+- `detection_engine.py`: Coordinates YOLO component detection and circuit defect scanning pipelines.
+- `model_manager.py`: Centralized model manager providing lazy-loading, CUDA GPU detection, session caching, and fallback weights resolution.
 
-### 3. Database Layer (MongoDB / PostgreSQL)
-- **Where to Integrate**: Create `db/database.py` and `db/models.py`.
-- **Methodology**: Use SQLAlchemy (for PostgreSQL) or Beanie/Motor (for MongoDB) to persist inspection logs. Instead of exporting CSV files locally, write the inspection payload directly to the database. The dashboard can then pull history records for analytics graphs.
+### 3. Inspection Checkers Layer (`src/inspection/`)
+- Orchestrates placement checking algorithms, physical millimeter displacement calculations ($\text{mm}$), quantity counting, and crack fracture evaluation.
 
-### 4. Live Camera & MQTT Integration
-- **Where to Integrate**: Create `utils/camera_feed.py` and `utils/mqtt_client.py`.
-- **Methodology**:
-  - Live Feed: Use OpenCV `VideoCapture` inside a background thread to poll frames from a USB/IP camera.
-  - MQTT: Trigger a camera snapshot via MQTT signals from a PLC (Programmable Logic Controller) on the physical assembly line conveyor belt, then run the inspection engine, and report back status via MQTT.
+### 4. Exporter Layer (`src/utils/report_exporter.py`)
+- Implements the Factory Pattern (`ReportExporterFactory`) to instantiate `ExcelReportExporter`, `CSVReportExporter`, `PDFReportExporter`, and `JSONReportExporter`.
 
-### 5. Docker & Cloud Deployment
-- **Where to Integrate**: Write a `Dockerfile` and `docker-compose.yml` in the project root.
-- **Methodology**: Build a Docker image containerizing Streamlit and FastAPI. Deploy onto AWS (ECS or EKS) or Google Cloud Run, utilizing GCP Cloud Storage buckets for raw board image logging.
+---
+
+## 🚀 Presentation Diagrams & System Specs
+
+### Component Detector Specs
+- **Model File**: `models/trained/Component/Component_best.pt`
+- **Primary Task**: Component Inventory (`DETECT → IDENTIFY → COUNT → DISPLAY → EXPORT`)
+- **Classes Count**: 22 Classes
+- **Inference Threshold**: `Confidence = 0.25`, `IoU = 0.45`
+
+### Defect Detector Specs
+- **Profile Mappings**:
+  - `arduino_uno` $\rightarrow$ `DeepPCB` (`DeepPCB.pt`)
+  - `esp32_devkit` $\rightarrow$ `DsPCBSD+` (`DsPCBSD+.pt`)
+  - `stm32_blue_pill` $\rightarrow$ `HRIPCB` (`HRIPCB.pt`)
+  - `generic_pcb` $\rightarrow$ `TDD-PCB` (`PDD-PCB-best.pt`)
+- **Primary Task**: Solder joint fracture & copper trace anomaly scan
+

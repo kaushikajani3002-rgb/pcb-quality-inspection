@@ -1,105 +1,145 @@
-# Automated Optical Inspection (AOI) System for PCB Assembly Verification
+# Automated Optical Inspection (AOI) System for PCB Component Detection & Defect Inspection
 
 [![Python Version](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
 [![YOLOv11](https://img.shields.io/badge/YOLO-v11m-orange.svg)](https://github.com/ultralytics/ultralytics)
-[![Streamlit](https://img.shields.io/badge/UI-Streamlit-red.svg)](https://streamlit.io/)
+[![Streamlit](https://img.shields.io/badge/UI-Streamlit--Industrial-red.svg)](https://streamlit.io/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A production-grade software infrastructure and operator console for **Automated Optical Inspection (AOI)** of populated Printed Circuit Board (PCB) assemblies. This application wraps deep learning (YOLO11m component detection) and custom verification checkers to validate physical alignment offsets (in millimeters), quantities, missing components, and solder joint cracks against reference layouts.
+A production-grade, industrial software infrastructure and operator console for **Automated Optical Inspection (AOI)** of Printed Circuit Board (PCB) assemblies. The system operates as a dual-pipeline inspection engine combining **PCB Component Detection & Inventory** (`DETECT → IDENTIFY → COUNT → DISPLAY → EXPORT`) with concurrent **Circuit & Solder Defect Inspection**.
+
+---
+
+## 📸 Presentation & Dashboard Highlights
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    INDUSTRIAL PCB AOI CONTROL CONSOLE                        │
+├─────────────────┬─────────────────────────┬─────────────────────────────────┤
+│ TOTAL COMPONENTS│ UNIQUE COMPONENT TYPES  │ AVERAGE CONFIDENCE              │
+│       45        │            9            │             74.2%               │
+├─────────────────┴─────────────────────────┴─────────────────────────────────┤
+│ 45 components detected across 9 component types (Avg. Conf: 74.2%)          │
+├───────────────────────────┬─────────────────────────────────────────────────┤
+│ COMPONENT TYPE SUMMARY    │ COMPONENT VISUALIZATION                         │
+│                           │                                                 │
+│ Capacitor      18         │  [ Large PCB Image with Green Bounding Boxes ]  │
+│ Resistor       12         │  [ Bounding Box Labels: <class_name> <conf>  ]  │
+│ IC              6         │                                                 │
+│ Connector       6         │                                                 │
+│ LED             2         │                                                 │
+│ Switch          1         │                                                 │
+│ ...                       │                                                 │
+├───────────────────────────┴─────────────────────────────────────────────────┤
+│ COMPONENT DETECTION DETAILS (Sorted by Confidence Descending)               │
+│ #  │ Component │ Class ID │ Confidence │ Bounding Box (X1, Y1, X2, Y2) │ Center│
+└────┴───────────┴──────────┴────────────┴───────────────────────────────┴───────┘
+```
 
 ---
 
 ## 🚀 Key Features
 
-- **Industrial Operator UI**: Modern, dark-themed Streamlit control console designed for assembly line operators.
-- **YOLO11m Component Detection**: Real-time component bounding box inference and quantity census.
-- **Physical Millimeter Verification**: Euclidean distance position checkers calculating component displacements in physical millimeters ($\text{mm}$) using normalized percentages relative to template boundary dimensions.
-- **Solder Joint Inspection**: Segmentation overlays representing solder joint statuses and highlighting joint crack fractures.
-- **Polymorphic Exporters**: Factory Pattern report generator creating certified quality outputs in **PDF** (rendered tables and styling), **CSV** (ledger reports), and **JSON** (database synchronization logs).
-- **Graceful Hardware Fallback**: Safe loading blocks verifying file integrity, size boundaries, magic-byte header signatures, and weights configurations.
+- **Industrial Operator Console**: Modern dark-slate dashboard (`#0f172a`, `#1e293b`) designed for electronic assembly lines, featuring real-time state management (`IDLE`, `PROCESSING`, `COMPLETED`, `ERROR`), KPI metric cards, and responsive data tables.
+- **Pure Component Detection & Inventory System**: Real-time YOLO inference detecting all physical PCB components (`resistor`, `capacitor`, `IC`, `connector`, `LED`, `diode`, `switch`, `transistor`, etc.) as the absolute source of truth without dropping or altering detections.
+- **Dynamic Inventory KPI Metrics**: Computes Total Component Count, Unique Component Types, Average Confidence Percentage, and Class Summary Tables with automated sum-consistency verification ($\sum \text{Counts} == \text{Total}$).
+- **Dual-Model Deep Learning Pipeline**: Concurrent routing to:
+  1. **Component YOLO Model** (`Component_best.pt` / `22 classes`)
+  2. **Profile-Specific Circuit Defect Models** (`DeepPCB`, `DsPCBSD+`, `HRIPCB`, `TDD-PCB`)
+- **Automated Defect Model Auto-Binding**: PCB template selection automatically binds the matching defect model (e.g. Arduino Uno $\rightarrow$ DeepPCB, ESP32 $\rightarrow$ DsPCBSD+, STM32 $\rightarrow$ HRIPCB, Generic $\rightarrow$ TDD-PCB).
+- **Polymorphic Exporter Factory**: Multi-format quality report generator creating:
+  - **Multi-Sheet Excel Workbooks (.xlsx)**: Summary Metadata, Component Type Summary, and Full Detection Details ledger.
+  - **CSV Ledgers (.csv)**: Flat tabular exports for logistics and inventory integration.
+  - **PDF Quality Certificates (.pdf)**: Rendered ReportLab tables with branding and timestamps.
+  - **JSON Logs (.json)**: Structured payloads for database synchronization.
+- **ModelManager Caching & Hardware Acceleration**: Lazy-loading and PyTorch instance caching across Streamlit reruns, CUDA GPU acceleration support, and safe fallback weight resolution.
 
 ---
 
 ## 🛠️ Technology Stack & Requirements
 
 - **Python Version**: `3.12` or higher
-- **Core Packages**:
-  - `ultralytics` (YOLOv11 Deep Learning Models)
-  - `streamlit` (Operator Dashboard)
-  - `opencv-python` (Perspective warping and alignment)
-  - `pillow` (Overlay drawing and image rendering)
-  - `reportlab` (PDF generation factory)
-  - `pandas` & `numpy` (Inventory statistics and matrix math)
-  - `pyyaml` (System configuration loaders)
+- **Deep Learning Framework**: `ultralytics` (YOLOv11)
+- **Dashboard UI**: `streamlit`
+- **Computer Vision & Image Processing**: `opencv-python`, `pillow`
+- **Data Engineering**: `pandas`, `numpy`, `openpyxl`
+- **PDF Exporter Engine**: `reportlab`
+- **Configuration Management**: `pyyaml`
 
 ---
 
-## 📂 Repository Directory Layout
-
-> [!NOTE]
-> - For the current status of all features, technical walkthroughs, and test results, refer to the [Project Progress Report](PROGRESS_REPORT.md).
-> - For an in-depth class-by-class and file-by-file description of every folder and script in this codebase, refer to the [Directory & File Catalog](docs/FILE_CATALOG.md).
+## 📂 Repository Layout
 
 ```text
 pcb-quality-inspection/
 ├── src/
 │   ├── app/
-│   │   └── main.py                 # Streamlit Operator UI & State Machine
+│   │   └── main.py                 # Industrial Operator Dashboard & State Machine
 │   ├── ai/
-│   │   └── detection_engine.py     # YOLO Inference wrapper & coordination module
+│   │   ├── detection_engine.py     # YOLO Component & Circuit Inspection Engine
+│   │   └── model_manager.py        # Centralized Model Manager & Caching Layer
 │   ├── inspection/
-│   │   ├── inspection_engine.py    # Master checker orchestrator
-│   │   ├── component_counter.py    # Counts detections against expected totals
-│   │   ├── missing_checker.py      # Finds absent expected components
-│   │   ├── extra_checker.py        # Highlights unregistered objects
-│   │   ├── position_checker.py     # Millimeter-based displacement calculations
-│   │   └── crack_checker.py        # Detects solder joint fractures
+│   │   ├── inspection_engine.py    # Algorithmic checker orchestrator
+│   │   ├── component_counter.py    # Quantity census module
+│   │   ├── missing_checker.py      # Missing component checker (Future Scope)
+│   │   ├── extra_checker.py        # Unregistered item checker (Future Scope)
+│   │   ├── position_checker.py     # Millimeter offset checker (Future Scope)
+│   │   └── crack_checker.py        # Solder joint fracture analyzer
 │   ├── mock/
-│   │   └── mock_results.py         # Generates mock inspection data
+│   │   └── mock_results.py         # Mock inspection payload generator
 │   └── utils/
-│       ├── config_loader.py        # Dynamic split configuration loader
-│       ├── constants.py            # Status and styling hex colors
-│       ├── file_manager.py         # System directory initializer
-│       ├── helper.py               # Formatters and Pillow image converters
-│       ├── json_loader.py          # Safe JSON template reader/writer
-│       ├── logger.py               # File logger configuration
-│       ├── report_exporter.py      # Abstract report exporter classes (Factory Pattern)
-│       ├── template_manager.py     # Manages template updates and checks
-│       └── validators.py           # Size & magic-byte header validators
+│       ├── config_loader.py        # Dynamic split YAML configuration loader
+│       ├── constants.py            # Status & styling color hex codes
+│       ├── file_manager.py         # Output directory manager
+│       ├── helper.py               # Image converters & formatters
+│       ├── json_loader.py          # JSON template loader
+│       ├── logger.py               # Logging module
+│       ├── report_exporter.py      # Polymorphic Report Exporter Factory (Excel/CSV/PDF/JSON)
+│       ├── template_manager.py     # PCB template profile manager
+│       └── validators.py           # File size & magic-byte header validators
 ├── configs/
-│   ├── app.yaml                    # UI and report path configurations
-│   ├── inference.yaml              # Confidence and alignment tolerances
-│   ├── model.yaml                  # Trained and pre-trained model paths
+│   ├── app.yaml                    # UI theme and output paths
+│   ├── inference.yaml              # Confidence (0.25) & IoU (0.45) thresholds
+│   ├── model.yaml                  # Model registry & profile defect mapping
 │   └── training.yaml               # Training hyperparameters
-├── training/
-│   ├── component_detection/        # YOLO component detection training pipeline
-│   │   └── train_component_yolo.py
-│   └── defect_detection/           # YOLO defect fine-tuning pipeline
-│       └── finetune_defect_yolo.py
-├── inference/
-│   └── inference_defect_yolo.py    # Standalone batch inference evaluator
-├── datasets/                       # Datasets policy & documentation
-│   ├── external/
-│   │   └── ALL_cercit/             # Moved dataset files
-│   └── README.md
+├── templates/                      # PCB template profiles (arduino_uno, esp32_devkit, stm32_blue_pill, generic_pcb)
 ├── models/
-│   ├── pretrained/                 # COCO pre-trained base model weights
-│   ├── trained/                    # Production-grade fine-tuned models
-│   ├── checkpoints/                # Epoch weights checkpoints
-│   ├── exported/                   # ONNX/TensorRT deployments
-│   └── registry.yaml               # Tracks registry details of models
-├── templates/                      # PCB template profiles (arduino, esp32...)
-├── docs/                           # Documentation and guides
-│   ├── DATASET.md                  # Custom dataset structuring guide
-│   └── PROJECT_INFO.md             # Onboarding project walkthrough
+│   └── trained/                    # Production-grade trained weights
+│       ├── Component/              # Component Detector (22 classes)
+│       ├── DeepPCB/                # Arduino Uno Defect Detector
+│       ├── DsPCBSD+/               # ESP32 Defect Detector
+│       ├── HRIPCB/                 # STM32 Defect Detector
+│       └── TDD-PCB/                # Generic PCB Defect Detector
+├── docs/                           # Technical documentation & presentation guides
+│   ├── PROJECT_INFO.md             # In-depth system overview & presentation guide
+│   ├── architecture.md             # System architecture & dataflow diagrams
+│   ├── FILE_CATALOG.md             # File-by-file codebase catalog
+│   └── DATASET.md                  # Custom dataset structuring guide
 ├── tests/
-│   └── validate_run.py             # Pipeline integration test
+│   ├── validate_run.py             # System pipeline integration test
+│   ├── test_thresholds.py          # Confidence & IoU threshold test suite
+│   ├── test_workflow_scenarios.py  # Status aggregator logic test suite
+│   └── diagnose_full_pipeline.py  # Reference PCB image diagnostic test
+├── PROGRESS_REPORT.md              # Project progress & milestone report
 └── requirements.txt                # Project dependencies
 ```
 
 ---
 
-## 💻 Installation & Setup
+## 🤖 Deep Learning Models Architecture
+
+The system coordinates 5 specialized YOLO models:
+
+| Model Role | Model Target | Weights Path | Supported Classes |
+| :--- | :--- | :--- | :--- |
+| **Component Detector** | Common PCB Components | `models/trained/Component/Component_best.pt` | 22 classes (`battery`, `button`, `buzzer`, `capacitor`, `clock`, `connector`, `diode`, `display`, `fuse`, `heatsink`, `ic`, `inductor`, `led`, `pads`, `pins`, `potentiometer`, `relay`, `resistor`, `switch`, `transducer`, `transformer`, `transistor`) |
+| **Arduino Defect Detector** | `arduino_uno` PCB | `models/trained/DeepPCB/DeepPCB.pt` | 6 classes (`open`, `short`, `mousebite`, `spur`, `copper`, `pin_hole`) |
+| **ESP32 Defect Detector** | `esp32_devkit` PCB | `models/trained/DsPCBSD+/DsPCBSD+.pt` | 9 classes (`SH`, `SP`, `SC`, `OP`, `MB`, `HB`, `CS`, `CFO`, `BMFO`) |
+| **STM32 Defect Detector** | `stm32_blue_pill` PCB | `models/trained/HRIPCB/HRIPCB.pt` | 6 classes (`missing_hole`, `mouse_bite`, `open_circuit`, `short`, `spur`, `spurious_copper`) |
+| **Generic Defect Detector** | `generic_pcb` PCB | `models/trained/TDD-PCB/PDD-PCB-best.pt` | 6 classes (`missing_hole`, `mouse_bite`, `open_circuit`, `short`, `spur`, `spurious_copper`) |
+
+---
+
+## 💻 Installation & Quickstart
 
 1. **Clone the Repository**:
    ```bash
@@ -121,74 +161,54 @@ pcb-quality-inspection/
    pip install -r requirements.txt
    ```
 
-4. **Verify Weight Setup**:
-   Trained weights are registered inside `models/trained/component_detector_best.pt` and loaded automatically by `src/ai/detection_engine.py` when running inference. Pretrained YOLO weights live in `models/pretrained/`.
+4. **Run System Integration Verification**:
+   ```bash
+   python tests/validate_run.py
+   ```
+
+5. **Launch Industrial Dashboard Console**:
+   ```bash
+   streamlit run src/app/main.py
+   ```
+   Open browser at: **`http://localhost:8501`**
 
 ---
 
-## ⚡ Running the Dashboard Console
+## 📊 Exported Reports Structure
 
-Launch the Streamlit operator dashboard locally:
-```bash
-streamlit run src/app/main.py
-```
-Open your browser at: **`http://localhost:8501`**
-
----
-
-## 🏋️ Training & Fine-Tuning Models
-
-See [docs/DATASET.md](docs/DATASET.md) for how to structure your custom PCB images.
-
-### Train Component Detector
-To train the YOLO11m component detection model to recognize parts:
-```bash
-python training/component_detection/train_component_yolo.py --data datasets/components/data.yaml --epochs 70 --batch 8
-```
-
-### Fine-Tune Defect Detector
-To fine-tune pre-trained component weights on defect datasets:
-```bash
-python training/defect_detection/finetune_defect_yolo.py
-```
-
-### Run Standalone Batch Inference
-To evaluate predictions over test images:
-```bash
-python inference/inference_defect_yolo.py
-```
+- **Excel (`.xlsx`)**:
+  - `Summary Sheet`: Board Name, Image Name, Timestamp, Model Path, Total Detections, Unique Types, Average Confidence, Confidence/IoU Thresholds, Hardware Device.
+  - `Component Summary Sheet`: Component Class vs Count.
+  - `Detection Details Sheet`: Inventory ledger (`#`, `Image`, `Component Class`, `Class ID`, `Confidence`, `X1`, `Y1`, `X2`, `Y2`, `Center X %`, `Center Y %`).
+- **CSV (`.csv`)**: Flat tabular file for database/ERP ingestion.
+- **PDF (`.pdf`)**: Formatted quality certificate with summary metrics and inventory details.
+- **JSON (`.json`)**: Machine-readable inspection log.
 
 ---
 
-## 🔧 Inspection Configuration (`configs/inference.yaml`)
+## 🧪 Verification & Test Suite
 
-You can customize parameters directly without changing the codebase:
-```yaml
-inspection:
-  confidence: 0.50            # YOLO confidence threshold
-  iou: 0.45                   # Non-Maximum Suppression (NMS) IoU limit
-  position_tolerance: 15.0    # Default position checker boundary limit
+Run all automated verification tests:
+```bash
+python tests/validate_run.py
+python tests/test_thresholds.py
+python -m unittest tests/test_workflow_scenarios.py
+python tests/diagnose_full_pipeline.py
 ```
-
----
-
-## 📈 Planned Work / Future Integration
-
-1. **OpenCV Perspective Preprocessor**: Implement homography transformation to align incoming frames automatically using board corner fiducials.
-2. **Defect Model Integration**: Move remaining defect checking tabs from mock generators to active deep learning inference once segmentation models are trained.
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See `LICENSE` for details.
 
 ---
 
-## 👤 Author
+## 👤 Project Team & Authors
 
 - **Kaushik Ajani**
 - **Vidhi Ranpura**
 - **Isha Kakadiya**
 - **Tushar Kacha**
-- **GitHub**: [kaushikajani3002-rgb](https://github.com/kaushikajani3002-rgb)
+- **GitHub Repository**: [kaushikajani3002-rgb/pcb-quality-inspection](https://github.com/kaushikajani3002-rgb/pcb-quality-inspection)
+
